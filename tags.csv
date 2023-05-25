@@ -1,0 +1,5 @@
+tag, value
+zzzTestBool,0
+zzzTestString,7
+zzzTestUDT.First,11
+zzzTestUDT.Second,Pass2

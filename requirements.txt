@@ -1,0 +1,3 @@
+pandas==1.5.3
+progressbar33==2.4
+pycomm3==1.2.11
