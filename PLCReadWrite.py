@@ -6,6 +6,8 @@ import csv
 from ast import literal_eval
 import PySimpleGUI as sg
 
+type_list = {}
+
 layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-')],
          [sg.CB('CSV Mode', key='-CSV_ENABLE-'), sg.Text('CSV Filename'), sg.InputText(key='-CSV_FILENAME-')],
          [sg.Text('Tag'), sg.InputText(key='-TAG-')],
@@ -13,8 +15,6 @@ layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-')],
 
 # Create the Window
 window = sg.Window('PLC Tag Read/Write', layout)
-
-
 
 def simplest_type(s):
     try:
@@ -78,6 +78,43 @@ def find_attributes(ip):
     for typ in plc.data_types:
         print(f'{typ} attributes: ', plc.data_types[typ]['attributes'])
 
+def check_type(ip, tag):
+    try:
+        data_type = type_list[tag]
+
+        return data_type
+    except:
+        with LogixDriver(ip) as plc:
+            result = plc.read(tag)
+
+            data_type = result.type
+
+            if data_type != None:
+
+                type_list[tag] = data_type
+
+                return data_type
+            else:
+                print(f'Tag: {tag} does not exist')
+
+def convert_type(value, type):
+    if type == 'DINT':
+        return int(value)
+    elif type == 'INT':
+        return int(value)
+    elif type == 'SINT':
+        return int(value)
+    elif type == 'BOOL':
+        if value == '1' or value == 'True' or value == 'true':
+            return True
+        else:
+            return False
+    elif type == 'REAL':
+        return float(value)
+    else:
+        return value
+
+
 def trend_tag(ip, tag, **kwargs):
     store_to_csv = kwargs.get('store_to_csv', False)
     data = []
@@ -124,15 +161,12 @@ def write_csv(csv_name, data):
 # writes a value to a tag
 def write_tag(ip, tag, value, **kwargs):
     with LogixDriver(ip) as plc:
-        return plc.write((tag, simplest_type(value)))
+        return plc.write(tag, convert_type(value, check_type(ip, tag)))
     
 # Writes tag value pairs read from a CSV file
 # CSV file must have header of tag, value
-# Since all values are read as strings, this function tries to guess what the type should be
-# Any number will be converted into an int or float so strings of numbers will be converted
 # Bools are to be written as 1 (True) or 0 (False)
 # UDTs must be written out in their full expanded names. For example: UDT.NestedUDT.TagName
-# Any situations where an infered type is incorrect, the write will be skipped for that tag
 def write_tags_from_csv(ip, csv_name):
     with LogixDriver(ip) as plc:
 
@@ -156,7 +190,9 @@ def write_tags_from_csv(ip, csv_name):
             tags = []
 
             for tag in data:
-                tags.append((tag[0], simplest_type(tag[1])))
+                value = convert_type(tag[1], check_type(ip, tag[0]))
+
+                tags.append(tag[0], value)
 
             print(tags)
             
