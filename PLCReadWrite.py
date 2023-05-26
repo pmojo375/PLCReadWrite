@@ -334,6 +334,14 @@ def save_history(ip, tag):
         pickle.dump((ip, tag), f)
         f.close()
 
+def validate_ip(ip):
+    pattern = re.compile(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
+    if pattern.match(ip):
+        return True
+    else:
+        return False
+
+
 csv_tooltip = ' When enabled, the read button will write the results to a CSV and the \n write button will read tag/value pairs from a CSV to write. When writing \n from a CSV, the header must be "tag, value". A CSV filename must \n be specified when writing but can be auto generated when reading.'
 value_tooltip = ' When writing a tag, the value must be in the correct format. \n For example, a BOOL must be written as 1 (True) or 0 (False). \n UDTs must be written out in their full expanded names. \n For example: UDT.NestedUDT.TagName                     '
 layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
@@ -371,18 +379,24 @@ if __name__ == "__main__":
             csv_enable = values['-CSV_ENABLE-']
             csv_file = values['-CSV_FILE-']
 
-            if csv_enable:
-                if csv_file != '':
-                    data = read_tag(str(ip), str(tag), store_to_csv=True, csv_name=str(csv_file))
-                else:
-                    data = read_tag(str(ip), str(tag), store_to_csv=True)
-            else:
-                data = read_tag(str(ip), str(tag))
-            
-            for key, value in data.items():
-                print(f'Tag: {key} = {value}')
+            if ip != '':
+                if validate_ip(ip):
+                    if csv_enable:
+                        if csv_file != '':
+                            data = read_tag(str(ip), str(tag), store_to_csv=True, csv_name=str(csv_file))
+                        else:
+                            data = read_tag(str(ip), str(tag), store_to_csv=True)
+                    else:
+                        data = read_tag(str(ip), str(tag))
+                    
+                    for key, value in data.items():
+                        print(f'Tag: {key} = {value}')
 
-            save_history(ip, tag)
+                    save_history(ip, tag)
+                else:
+                    print('Please enter a valid IP address')    
+            else:
+                print('Please enter an IP address')
 
         elif event == 'Write':
             tag = values['-TAG-']
@@ -391,15 +405,21 @@ if __name__ == "__main__":
             csv_enable = values['-CSV_ENABLE-']
             csv_file = values['-CSV_FILE-']
 
-            if csv_enable:
-                results = write_tags_from_csv(str(ip), str(csv_file))
+            if ip != '':
+                if validate_ip(ip):
+                    if csv_enable:
+                        results = write_tags_from_csv(str(ip), str(csv_file))
+                    else:
+                        results = write_tag(str(ip), str(tag), str(value))
+
+                    if results:
+                        print(f'{value} written to {tag} successfully')
+
+                        save_history(ip, tag)
+                else:
+                    print('Please enter a valid IP address')
             else:
-                results = write_tag(str(ip), str(tag), str(value))
-
-            if results:
-                print(f'{value} written to {tag} successfully')
-
-                save_history(ip, tag)
+                print('Please enter an IP address')
         elif event == '-CSV_ENABLE-':
             window['-CSV_FILE-'].update(disabled=not values['-CSV_ENABLE-'])
             window['-CSV_FILE_BROWSE-'].update(disabled=not values['-CSV_ENABLE-'])
