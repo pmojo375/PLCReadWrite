@@ -320,11 +320,12 @@ def read_tag(ip, tag, **kwargs):
 
             # tag is not an array
             else:
-                return ret.value
                 data = crawl_and_format(ret.value, ret.tag, {})
 
                 if store_to_csv:
                     write_csv(csv_name, data)
+
+                return data
 
 
 def save_history(ip, tag):
@@ -333,16 +334,18 @@ def save_history(ip, tag):
         pickle.dump((ip, tag), f)
         f.close()
 
+csv_tooltip = ' When enabled, the read button will write the results to a CSV and the \n write button will read tag/value pairs from a CSV to write. When writing \n from a CSV, the header must be "tag, value". A CSV filename must \n be specified when writing but can be auto generated when reading.'
+value_tooltip = ' When writing a tag, the value must be in the correct format. \n For example, a BOOL must be written as 1 (True) or 0 (False). \n UDTs must be written out in their full expanded names. \n For example: UDT.NestedUDT.TagName                     '
 layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
-         [sg.Frame('CSV File', [[sg.CB('Enable CSV Read/Write', key='-CSV_ENABLE-', enable_events=True)], [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_FILE-', disabled=True, size=31)]])],
+         [sg.Frame('CSV File', [[sg.CB('Enable CSV Read/Write', tooltip=csv_tooltip, key='-CSV_ENABLE-', enable_events=True)], [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_FILE-', disabled=True, size=31)]])],
          [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=40)]])],
-         [sg.Frame('Value', [[sg.InputText(key='-VALUE-', size=40)]])],
+         [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=40)]])],
          [sg.Frame('Results', [[sg.Output(size=(38, 5))]])],
-         [sg.Button('Read'), sg.Button('Write'), sg.Button('Cancel')]]
+         [sg.Column([[sg.Button('Read'), sg.Button('Write'), sg.Button('Cancel')]], justification='r')]]
 
 
 # Create the Window
-window = sg.Window('PLC Tag Read/Write', layout, size=(500, 400))
+window = sg.Window('PLC Tag Read/Write', layout, size=(300, 380))
 
 if __name__ == "__main__":
 
@@ -366,14 +369,18 @@ if __name__ == "__main__":
             tag = values['-TAG-']
             ip = values['-IP-']
             csv_enable = values['-CSV_ENABLE-']
-            csv_write_file = values['-CSV_FILE-']
+            csv_file = values['-CSV_FILE-']
 
             if csv_enable:
-                data = read_tag(str(ip), str(tag), store_to_csv=True, csv_name=str(csv_file))
+                if csv_file != '':
+                    data = read_tag(str(ip), str(tag), store_to_csv=True, csv_name=str(csv_file))
+                else:
+                    data = read_tag(str(ip), str(tag), store_to_csv=True)
             else:
                 data = read_tag(str(ip), str(tag))
             
-            print(data)
+            for key, value in data.items():
+                print(f'Tag: {key} = {value}')
 
             save_history(ip, tag)
 
@@ -390,7 +397,7 @@ if __name__ == "__main__":
                 results = write_tag(str(ip), str(tag), str(value))
 
             if results:
-                print('Write Successful')
+                print(f'{value} written to {tag} successfully')
 
                 save_history(ip, tag)
         elif event == '-CSV_ENABLE-':
