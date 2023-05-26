@@ -8,27 +8,13 @@ import PySimpleGUI as sg
 
 type_list = {}
 
-layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-')],
-         [sg.CB('CSV Mode', key='-CSV_ENABLE-'), sg.Text('CSV Filename'), sg.InputText(key='-CSV_FILENAME-')],
-         [sg.Text('Tag'), sg.InputText(key='-TAG-')],
-         [sg.Button('Read'), sg.Button('Write'), sg.Button('Cancel')]]
 
-# Create the Window
-window = sg.Window('PLC Tag Read/Write', layout)
-
-def simplest_type(s):
-    try:
-        return literal_eval(s)
-    except:
-        return s
-    
+# This function will crawl through a dictionary and format the data
 def crawl_and_format(obj, name, data):
 
-    # obj is a dict
+    # obj is a dictionary
     if isinstance(obj, dict):
-        # iterate though the dictionary
         for key, value in obj.items():
-            # call function again while incrementing layer
             data = crawl_and_format(value, f'{name}.{key}', data)
     # obj is a list
     elif isinstance(obj, list):
@@ -72,12 +58,15 @@ def main():
     #read_tag(str(ip), str(tag), store_to_csv=True, csv_name='tags.csv')
 
 
+# This function will print all attributes of all data types
 def find_attributes(ip):
     with LogixDriver(ip) as plc:
         pass
     for typ in plc.data_types:
         print(f'{typ} attributes: ', plc.data_types[typ]['attributes'])
 
+
+# This function will check if a tag type is already in the type list and if not it will add it
 def check_type(ip, tag):
     try:
         data_type = type_list[tag]
@@ -97,6 +86,8 @@ def check_type(ip, tag):
             else:
                 print(f'Tag: {tag} does not exist')
 
+
+# This function will convert the value to the correct type from the string
 def convert_type(value, type):
     if type == 'DINT':
         return int(value)
@@ -145,7 +136,7 @@ def trend_tag(ip, tag, **kwargs):
                 write.writerow(['time', 'tag'])
                 write.writerows(data)
 
-# determines if the data is a list or dict and writes to a csv file
+# This function will write a CSV file
 def write_csv(csv_name, data):
     if type(data) == list:
         with open(csv_name, 'w', newline='') as csvfile:
@@ -158,7 +149,7 @@ def write_csv(csv_name, data):
             writer.writeheader()
             writer.writerow(data)
 
-# writes a value to a tag
+# This function will write a tag value pair to the PLC
 def write_tag(ip, tag, value, **kwargs):
     with LogixDriver(ip) as plc:
         return plc.write(tag, convert_type(value, check_type(ip, tag)))
@@ -192,12 +183,14 @@ def write_tags_from_csv(ip, csv_name):
             for tag in data:
                 value = convert_type(tag[1], check_type(ip, tag[0]))
 
-                tags.append(tag[0], value)
+                tags.append((tag[0], value))
 
             print(tags)
             
             return plc.write(*tags)
-        
+
+
+# This function will read a tag value pair from the PLC
 def read_tag(ip, tag, **kwargs):
 
     store_to_csv = kwargs.get('store_to_csv', False)
@@ -327,41 +320,81 @@ def read_tag(ip, tag, **kwargs):
 
             # tag is not an array
             else:
+                return ret.value
                 data = crawl_and_format(ret.value, ret.tag, {})
 
                 if store_to_csv:
                     write_csv(csv_name, data)
 
-                return data
+
+def save_history(ip, tag):
+    if ip != '' and tag != '':
+        f = open('plc_readwrite.pckl', 'wb')
+        pickle.dump((ip, tag), f)
+        f.close()
+
+layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
+         [sg.Frame('CSV File', [[sg.CB('Enable CSV Read/Write', key='-CSV_ENABLE-', enable_events=True)], [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_FILE-', disabled=True, size=31)]])],
+         [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=40)]])],
+         [sg.Frame('Value', [[sg.InputText(key='-VALUE-', size=40)]])],
+         [sg.Frame('Results', [[sg.Output(size=(38, 5))]])],
+         [sg.Button('Read'), sg.Button('Write'), sg.Button('Cancel')]]
+
+
+# Create the Window
+window = sg.Window('PLC Tag Read/Write', layout, size=(500, 400))
 
 if __name__ == "__main__":
+
+    try:
+        window.read(timeout=0)
+        f = open('plc_readwrite.pckl', 'rb')
+        data_stored = pickle.load(f)
+        f.close()
+        window['-IP-'].update(str(data_stored[0]))
+        window['-TAG-'].update(str(data_stored[1]))
+    except FileNotFoundError:
+        pass
+
     # Event Loop to process "events" and get the "values" of the inputs
     while True:
         event, values = window.read()
 
         if event == sg.WIN_CLOSED or event == 'Cancel': # if user closes window or clicks cancel
             break
-
-        if event == 'Read':
+        elif event == 'Read':
             tag = values['-TAG-']
             ip = values['-IP-']
             csv_enable = values['-CSV_ENABLE-']
-            csv_file = values['-CSV_FILENAME-']
+            csv_write_file = values['-CSV_FILE-']
 
-            data = read_tag(str(ip), str(tag), store_to_csv=csv_enable, csv_name=csv_file)
+            if csv_enable:
+                data = read_tag(str(ip), str(tag), store_to_csv=True, csv_name=str(csv_file))
+            else:
+                data = read_tag(str(ip), str(tag))
             
-            print(f'Reading {tag} from PLC at IP {ip} with CSV mode set to {csv_enable}')
+            print(data)
 
-            results_active = True
-            layout2 = [[sg.Text('Results')],
-                    [sg.Text(data, key='-RESULTS-')]]
-        
-            results = sg.Window('Results', layout2)
+            save_history(ip, tag)
 
-        if results_active:
-            ev2, vals2 = results.read(timeout=100)
-            if ev2 == sg.WIN_CLOSED:
-                results_active = False
-                results.close()
+        elif event == 'Write':
+            tag = values['-TAG-']
+            ip = values['-IP-']
+            value = values['-VALUE-']
+            csv_enable = values['-CSV_ENABLE-']
+            csv_file = values['-CSV_FILE-']
+
+            if csv_enable:
+                results = write_tags_from_csv(str(ip), str(csv_file))
+            else:
+                results = write_tag(str(ip), str(tag), str(value))
+
+            if results:
+                print('Write Successful')
+
+                save_history(ip, tag)
+        elif event == '-CSV_ENABLE-':
+            window['-CSV_FILE-'].update(disabled=not values['-CSV_ENABLE-'])
+            window['-CSV_FILE_BROWSE-'].update(disabled=not values['-CSV_ENABLE-'])
 
 window.close()
