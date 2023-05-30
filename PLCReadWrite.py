@@ -5,9 +5,9 @@ import time
 import csv
 from ast import literal_eval
 import PySimpleGUI as sg
+import threading
 
 type_list = {}
-
 
 # This function will crawl through a dictionary and format the data
 def crawl_and_format(obj, name, data):
@@ -341,6 +341,46 @@ def validate_ip(ip):
     else:
         return False
 
+# This function will read a tag value pair from the PLC at a set interval
+class TagTrender:
+    def __init__(self, ip, tag, interval=1):
+        self.ip = ip
+        self.tag = tag
+        self.interval = interval
+        self.plc = LogixDriver(self.ip)
+        self.plc.open()
+        self.stop_event = threading.Event()
+        self.thread = None
+
+    def read_tag(self, window):
+        while not self.stop_event.is_set():
+            result = self.plc.read(self.tag)
+            window.write_event_value('-THREAD-', result.value)
+            self.stop_event.wait(self.interval)
+    
+    def stop(self):
+        if self.thread is not None:
+            self.stop_event.set()
+
+    def set_tag(self, tag):
+        self.tag = tag
+
+    def run(self, window):
+        self.stop_event.clear()
+        self.thread = threading.Thread(target=self.read_tag, args=(window,))
+        self.thread.start()
+
+'''
+trender = TagTrender('192.168.1.229', 'zzzTimer.ACC', 0.5)
+
+try:
+    trender.run()
+    input('Press Enter to stop')
+finally:
+    trender.stop()
+
+'''
+sg.theme("DarkBlue")
 
 csv_tooltip = ' When enabled, the read button will write the results to a CSV and the \n write button will read tag/value pairs from a CSV to write. When writing \n from a CSV, the header must be "tag, value". A CSV filename must \n be specified when writing but can be auto generated when reading.'
 value_tooltip = ' When writing a tag, the value must be in the correct format. \n For example, a BOOL must be written as 1 (True) or 0 (False). \n UDTs must be written out in their full expanded names. \n For example: UDT.NestedUDT.TagName                     '
@@ -349,11 +389,13 @@ layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
          [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=40)]])],
          [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=40)]])],
          [sg.Frame('Results', [[sg.Output(size=(38, 5))]])],
-         [sg.Column([[sg.Button('Read'), sg.Button('Write'), sg.Button('Cancel')]], justification='r')]]
+         [sg.Column([[sg.Button('Read'), sg.Button('Write'), sg.Button('Start Trend'), sg.Button('Cancel')]], justification='r')]]
 
 
 # Create the Window
 window = sg.Window('PLC Tag Read/Write', layout, size=(300, 380))
+
+trender = None
 
 if __name__ == "__main__":
 
@@ -372,6 +414,10 @@ if __name__ == "__main__":
         event, values = window.read()
 
         if event == sg.WIN_CLOSED or event == 'Cancel': # if user closes window or clicks cancel
+            if trender is not None:
+                trender.stop()
+                window['Start Trend'].update('Start Trend')
+                trender = None
             break
         elif event == 'Read':
             tag = values['-TAG-']
@@ -423,5 +469,22 @@ if __name__ == "__main__":
         elif event == '-CSV_ENABLE-':
             window['-CSV_FILE-'].update(disabled=not values['-CSV_ENABLE-'])
             window['-CSV_FILE_BROWSE-'].update(disabled=not values['-CSV_ENABLE-'])
+        elif event == 'Start Trend':
+            if trender is None:
+                try:
+                    interval = 1
+                    trender = TagTrender(values['-IP-'], values['-TAG-'], interval)
+                    trender.run(window)
+                    print('Trending...')
+                    window['Start Trend'].update('Stop Trend')
+                except ValueError:
+                    print('Please enter a valid IP address')
+            else:
+                trender.stop()
+                window['Start Trend'].update('Start Trend')
+                trender = None
+        elif event == '-THREAD-':
+            print(values['-THREAD-'])
+
 
 window.close()

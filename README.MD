@@ -8,6 +8,17 @@ I only implemented additional features and wrapped the pycomm3 functions in my o
 
 Take a look at their work here: https://github.com/ottowayi/pycomm3
 
+When the GUI opens up you will have a few areas to input information:
+  - IP Address: Enter the PLC IP address here.
+  - Enable CSV Read/Write: Check this box to enable CSV functionality. When reading from the PLC while enabled, your results will output to a CSV file. When writing to the PLC, tag/value pairs will be read from a CSV file and each tag will have its value written to it.
+  - Browse: Click this to browse for your CSV file. When one is selected, its path will be written to the text box to the right of this button. You may also type a path driectly to the text box. Paths can be relative. For example, if running the script in a folder that also contains a tags.csv file, you may just type "tags.csv" in the text box.
+  - Tag: When CSV read/write is disabled and you are writing to the PLC, this is the tag that will be written to. When reading, this will be the tag that you read reguardless of whether you have CSV read/write enabled or not.
+  - Value: When you have CSV read/write disabled and you are writing to the PLC, this is the value you are writing. When reading this has no use and may be left empty reguardless if CSV read/write is on or not.
+  - Results: This is where your results will be printed. It will tell you if there are any issues as well with the read/write or if any information was not entered or entered incorrectly.
+  - Read: If everything is inputted correctly, this will read a tag from the PLC.
+  - Write: If everthing is inputted correctly, this will write a tag/value pair to the PLC or read tag/value pairs from a CSV to write.
+  - Cancel: Closes the window.
+
 FUNCTIONS
 
 simplest_type
