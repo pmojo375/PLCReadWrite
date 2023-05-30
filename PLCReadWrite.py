@@ -476,6 +476,7 @@ if __name__ == "__main__":
                     trender = TagTrender(values['-IP-'], values['-TAG-'], interval)
                     trender.run(window)
                     print('Trending...')
+                    save_history(ip, tag)
                     window['Start Trend'].update('Stop Trend')
                 except ValueError:
                     print('Please enter a valid IP address')
