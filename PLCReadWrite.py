@@ -28,44 +28,6 @@ def crawl_and_format(obj, name, data):
     return data
 
 
-def main():
-
-    try:
-        f = open('plc_readwrite.pckl', 'rb')
-        data_stored = pickle.load(f)
-        f.close()
-        file_found = True
-    except FileNotFoundError:
-        file_found = False
-
-    if file_found:
-        ip = input(f'Please Input IP Address (Press Enter For {data_stored[0]}): ')
-        tag = input(f'Please Input Tag (Press Enter For {data_stored[1]}): ')
-    else:
-        ip = input(f'Please Input IP Address: ')
-        tag = input(f'Please Input Tag: ')
-
-    if ip == '':
-        ip = data_stored[0]
-
-    if tag == '':
-        tag = data_stored[1]
-
-    f = open('plc_readwrite.pckl', 'wb')
-    pickle.dump((ip, tag), f)
-    f.close()
-    write_tags_from_csv(str(ip), str(tag))
-    #read_tag(str(ip), str(tag), store_to_csv=True, csv_name='tags.csv')
-
-
-# This function will print all attributes of all data types
-def find_attributes(ip):
-    with LogixDriver(ip) as plc:
-        pass
-    for typ in plc.data_types:
-        print(f'{typ} attributes: ', plc.data_types[typ]['attributes'])
-
-
 # This function will check if a tag type is already in the type list and if not it will add it
 def check_type(ip, tag):
     try:
@@ -136,6 +98,7 @@ def trend_tag(ip, tag, **kwargs):
                 write.writerow(['time', 'tag'])
                 write.writerows(data)
 
+
 # This function will write a CSV file
 def write_csv(csv_name, data):
     if type(data) == list:
@@ -149,11 +112,13 @@ def write_csv(csv_name, data):
             writer.writeheader()
             writer.writerow(data)
 
+
 # This function will write a tag value pair to the PLC
 def write_tag(ip, tag, value, **kwargs):
     with LogixDriver(ip) as plc:
         return plc.write(tag, convert_type(value, check_type(ip, tag)))
-    
+
+
 # Writes tag value pairs read from a CSV file
 # CSV file must have header of tag, value
 # Bools are to be written as 1 (True) or 0 (False)
@@ -200,10 +165,7 @@ def read_tag(ip, tag, **kwargs):
 
     csv_name = kwargs.get('csv_name', 'tag_values.csv')
 
-    # if plc object is supplied in function call dont open a new connection every time you read
-    if 'plc' in kwargs:
-        plc = kwargs.get('plc')
-
+    with LogixDriver(ip) as plc:
         ret = plc.read(tag)
 
         # tag is an array and we are wanting more than one result in the array
@@ -254,7 +216,7 @@ def read_tag(ip, tag, **kwargs):
                 write_csv(csv_name, data)
 
             return data
-        
+
         # tag is not an array
         else:
             data = crawl_and_format(ret.value, ret.tag, {})
@@ -264,69 +226,6 @@ def read_tag(ip, tag, **kwargs):
 
             return data
 
-    # plc object not supplied in function call, open new connection
-    else:
-        with LogixDriver(ip) as plc:
-            ret = plc.read(tag)
-
-            # tag is an array and we are wanting more than one result in the array
-            if '[' in tag and '{' in tag or '[' not in tag and '{' in tag:
-                if '{' in tag and '[' not in tag:
-                    start = 0
-                    parent = re.search(".*(?=\{)", tag)[0]
-                else:
-                    start = int(re.search("(?<=\[)(.*?)(?=\])", tag)[0])
-                    parent = re.search(".*(?=\[)", tag)[0]
-
-                i = start
-                num_tags = len(ret.value)
-
-                for t in ret.value:
-
-                    tag_name = f'{parent}[{i}]'
-
-                    if store_to_csv:
-                        tmp = crawl_and_format(t, parent, {})
-                    else:
-                        tmp = crawl_and_format(t, tag_name, {})
-                        print(data)
-
-                    data = {'index': i}
-
-                    data.update(tmp)
-
-                    return_data.append(data)
-
-                    i = i + 1
-
-                if store_to_csv:
-                    write_csv(csv_name, return_data)
-
-                return return_data
-
-            # tag is an array with one member
-            elif '[' in tag:
-                start = int(re.search("(?<=\[)(.*?)(?=\])", tag)[0])
-                parent = re.search(".*(?=\[)", tag)[0]
-
-                tag_name = f'{parent}[{start}]'
-
-                data = crawl_and_format(ret.value, tag_name, {})
-
-                if store_to_csv:
-                    write_csv(csv_name, data)
-
-                return data
-
-            # tag is not an array
-            else:
-                data = crawl_and_format(ret.value, ret.tag, {})
-
-                if store_to_csv:
-                    write_csv(csv_name, data)
-
-                return data
-
 
 def save_history(ip, tag):
     if ip != '' and tag != '':
@@ -334,12 +233,14 @@ def save_history(ip, tag):
         pickle.dump((ip, tag), f)
         f.close()
 
+
 def validate_ip(ip):
     pattern = re.compile(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
     if pattern.match(ip):
         return True
     else:
         return False
+
 
 # This function will read a tag value pair from the PLC at a set interval
 class TagTrender:
@@ -370,16 +271,6 @@ class TagTrender:
         self.thread = threading.Thread(target=self.read_tag, args=(window,))
         self.thread.start()
 
-'''
-trender = TagTrender('192.168.1.229', 'zzzTimer.ACC', 0.5)
-
-try:
-    trender.run()
-    input('Press Enter to stop')
-finally:
-    trender.stop()
-
-'''
 sg.theme("DarkBlue")
 
 csv_tooltip = ' When enabled, the read button will write the results to a CSV and the \n write button will read tag/value pairs from a CSV to write. When writing \n from a CSV, the header must be "tag, value". A CSV filename must \n be specified when writing but can be auto generated when reading.'
@@ -390,7 +281,6 @@ layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
          [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=40)]])],
          [sg.Frame('Results', [[sg.Output(size=(38, 5))]])],
          [sg.Column([[sg.Button('Read'), sg.Button('Write'), sg.Button('Start Trend'), sg.Button('Cancel')]], justification='r')]]
-
 
 # Create the Window
 window = sg.Window('PLC Tag Read/Write', layout, size=(300, 380))
@@ -486,6 +376,5 @@ if __name__ == "__main__":
                 trender = None
         elif event == '-THREAD-':
             print(values['-THREAD-'])
-
 
 window.close()
