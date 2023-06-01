@@ -155,6 +155,99 @@ def write_tags_from_csv(ip, csv_name):
             return plc.write(*tags)
 
 
+#UNTESTED
+# This function will read tags from a CSV file and store them in a CSV file if desired
+def read_tag_from_csv(ip, csv_name, **kwargs):
+    store_to_csv = kwargs.get('store_to_csv', False)
+
+    data = []
+
+    # opening the CSV file
+    with open(csv_name, mode ='r') as file:   
+        
+        # reading the CSV file
+        csvFile = csv.reader(file)
+
+        line = 0
+        
+        # displaying the contents of the CSV file
+        for lines in csvFile:
+            if line != 0:
+                data.append(lines[0])
+
+            line = line + 1
+
+    for tag in data:
+        read_tag(ip, tag, store_to_csv = store_to_csv)
+
+
+# UNTTESTED
+# Meant to seperate the processing from hte read_tag function and allow for a persistant connection to the PLC
+def process_results(tag, results, **kwargs):
+
+    store_to_csv = kwargs.get('store_to_csv', False)
+
+    return_data = []
+    tmp = []
+
+    csv_name = kwargs.get('csv_name', 'tag_values.csv')
+
+    # tag is an array and we are wanting more than one result in the array
+    if '[' in tag and '{' in tag or '[' not in tag and '{' in tag:
+        if '{' in tag and '[' not in tag:
+            start = 0
+            parent = re.search(".*(?=\{)", tag)[0]
+        else:
+            start = int(re.search("(?<=\[)(.*?)(?=\])", tag)[0])
+            parent = re.search(".*(?=\[)", tag)[0]
+
+        i = start
+        num_tags = len(ret.value)
+
+        for t in ret.value:
+
+            tag_name = f'{parent}[{i}]'
+
+            if store_to_csv:
+                tmp = crawl_and_format(t, parent, {})
+            else:
+                tmp = crawl_and_format(t, tag_name, {})
+                print(data)
+
+            data = {'index': i}
+
+            data.update(tmp)
+
+            return_data.append(data)
+
+            i = i + 1
+
+        if store_to_csv:
+            write_csv(csv_name, return_data)
+
+        return return_data
+
+    # tag is an array with one member
+    elif '[' in tag:
+        start = int(re.search("(?<=\[)(.*?)(?=\])", tag)[0])
+        parent = re.search(".*(?=\[)", tag)[0]
+
+        tag_name = f'{parent}[{start}]'
+
+        data = crawl_and_format(ret.value, tag_name, {})
+
+        if store_to_csv:
+            write_csv(csv_name, data)
+
+        return data
+
+    # tag is not an array
+    else:
+        data = crawl_and_format(ret.value, ret.tag, {})
+
+        if store_to_csv:
+            write_csv(csv_name, data)
+
 # This function will read a tag value pair from the PLC
 def read_tag(ip, tag, **kwargs):
 
