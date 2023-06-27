@@ -248,6 +248,7 @@ def process_results(tag, results, **kwargs):
         if store_to_csv:
             write_csv(csv_name, data)
 
+
 # This function will read a tag value pair from the PLC
 def read_tag(ip, tag, **kwargs):
 
@@ -373,10 +374,11 @@ layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
          [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=40)]])],
          [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=40)]])],
          [sg.Frame('Results', [[sg.Output(size=(38, 5))]])],
+         [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=40)]])],
          [sg.Column([[sg.Button('Read'), sg.Button('Write'), sg.Button('Start Trend'), sg.Button('Cancel')]], justification='r')]]
 
 # Create the Window
-window = sg.Window('PLC Tag Read/Write', layout, size=(300, 380))
+window = sg.Window('PLC Tag Read/Write', layout, size=(300, 433))
 
 trender = None
 
@@ -455,12 +457,20 @@ if __name__ == "__main__":
         elif event == 'Start Trend':
             if trender is None:
                 try:
-                    interval = 1
-                    trender = TagTrender(values['-IP-'], values['-TAG-'], interval)
-                    trender.run(window)
-                    print('Trending...')
-                    save_history(ip, tag)
-                    window['Start Trend'].update('Stop Trend')
+                    try:
+                        float(values['-RATE-'])
+                        ok_rate = True
+                    except ValueError:
+                        ok_rate = False
+                    if ok_rate:
+                        save_history(values['-IP-'], values['-TAG-'])
+                        interval = float(values['-RATE-'])
+                        trender = TagTrender(values['-IP-'], values['-TAG-'], interval)
+                        trender.run(window)
+                        print('Trending...')
+                        window['Start Trend'].update('Stop Trend')
+                    else:
+                        print('Invalid trend rate, value must be a number')
                 except ValueError:
                     print('Please enter a valid IP address')
             else:
