@@ -367,18 +367,19 @@ class TagTrender:
 
 sg.theme("DarkBlue")
 
-csv_tooltip = ' When enabled, the read button will write the results to a CSV and the \n write button will read tag/value pairs from a CSV to write. When writing \n from a CSV, the header must be "tag, value". A CSV filename must \n be specified when writing but can be auto generated when reading.'
+csv_read_tooltip = ' When checked, the read tag results will be stored to a CSV file. A file \n name can be inputted or one will be auto generated if left empty. '
+csv_write_tooltip = ' When checked, a CSV file containing tag/value pairs will be written to the PLC. \n The header must be "tag,value". A CSV filename must be specified to read from. '
 value_tooltip = ' When writing a tag, the value must be in the correct format. \n For example, a BOOL must be written as 1 (True) or 0 (False). \n UDTs must be written out in their full expanded names. \n For example: UDT.NestedUDT.TagName                     '
 
 header = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
           [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=40)]])]]
 
-read_tab = [[sg.Frame('CSV', [[sg.CB('Write Results To CSV', tooltip=csv_tooltip, key='-CSV_READ-', enable_events=True)],
+read_tab = [[sg.Frame('CSV', [[sg.CB('Write Results To CSV', tooltip=csv_read_tooltip, key='-CSV_READ-', enable_events=True)],
             [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_READ_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_READ_FILE-', disabled=True, size=31)]])],
             [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=40)]])],
             [sg.Column([[sg.Button('Read'), sg.Button('Start Trend'), sg.Button('Cancel')]], justification='r')]]
 
-write_tab = [[sg.Frame('CSV', [[sg.CB('Write From CSV', tooltip=csv_tooltip, key='-CSV_WRITE-', enable_events=True)],
+write_tab = [[sg.Frame('CSV', [[sg.CB('Write From CSV', tooltip=csv_write_tooltip, key='-CSV_WRITE-', enable_events=True)],
              [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_WRITE_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_WRITE_FILE-', disabled=True, size=31)]])],
              [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=40)]])],
              [sg.Column([[sg.Button('Write'), sg.Button('Cancel')]], justification='r')]]
