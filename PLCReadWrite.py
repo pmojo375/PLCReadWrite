@@ -202,9 +202,9 @@ def process_results(tag, results, **kwargs):
             parent = re.search(".*(?=\[)", tag)[0]
 
         i = start
-        num_tags = len(ret.value)
+        num_tags = len(results.value)
 
-        for t in ret.value:
+        for t in results.value:
 
             tag_name = f'{parent}[{i}]'
 
@@ -234,7 +234,7 @@ def process_results(tag, results, **kwargs):
 
         tag_name = f'{parent}[{start}]'
 
-        data = crawl_and_format(ret.value, tag_name, {})
+        data = crawl_and_format(results.value, tag_name, {})
 
         if store_to_csv:
             write_csv(csv_name, data)
@@ -243,7 +243,7 @@ def process_results(tag, results, **kwargs):
 
     # tag is not an array
     else:
-        data = crawl_and_format(ret.value, ret.tag, {})
+        data = crawl_and_format(results.value, results.tag, {})
 
         if store_to_csv:
             write_csv(csv_name, data)
@@ -369,16 +369,27 @@ sg.theme("DarkBlue")
 
 csv_tooltip = ' When enabled, the read button will write the results to a CSV and the \n write button will read tag/value pairs from a CSV to write. When writing \n from a CSV, the header must be "tag, value". A CSV filename must \n be specified when writing but can be auto generated when reading.'
 value_tooltip = ' When writing a tag, the value must be in the correct format. \n For example, a BOOL must be written as 1 (True) or 0 (False). \n UDTs must be written out in their full expanded names. \n For example: UDT.NestedUDT.TagName                     '
-layout = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
-         [sg.Frame('CSV File', [[sg.CB('Enable CSV Read/Write', tooltip=csv_tooltip, key='-CSV_ENABLE-', enable_events=True)], [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_FILE-', disabled=True, size=31)]])],
-         [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=40)]])],
-         [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=40)]])],
-         [sg.Frame('Results', [[sg.Output(size=(38, 5))]])],
-         [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=40)]])],
-         [sg.Column([[sg.Button('Read'), sg.Button('Write'), sg.Button('Start Trend'), sg.Button('Cancel')]], justification='r')]]
+
+header = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
+          [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=40)]])]]
+
+read_tab = [[sg.Frame('CSV', [[sg.CB('Write Results To CSV', tooltip=csv_tooltip, key='-CSV_READ-', enable_events=True)],
+            [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_READ_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_READ_FILE-', disabled=True, size=31)]])],
+            [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=40)]])],
+            [sg.Column([[sg.Button('Read'), sg.Button('Start Trend'), sg.Button('Cancel')]], justification='r')]]
+
+write_tab = [[sg.Frame('CSV', [[sg.CB('Write From CSV', tooltip=csv_tooltip, key='-CSV_WRITE-', enable_events=True)],
+             [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_WRITE_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_WRITE_FILE-', disabled=True, size=31)]])],
+             [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=40)]])],
+             [sg.Column([[sg.Button('Write'), sg.Button('Cancel')]], justification='r')]]
+
+footer = [[sg.Frame('Results', [[sg.Output(size=(38, 10))]])]]
+
+tabs = [[header, sg.TabGroup([[
+    sg.Tab('Read', read_tab), sg.Tab('Write', write_tab)]])], footer]
 
 # Create the Window
-window = sg.Window('PLC Tag Read/Write', layout, size=(300, 433))
+window = sg.Window('PLC Tag Read/Write', tabs, size=(300, 433))
 
 trender = None
 
@@ -407,14 +418,16 @@ if __name__ == "__main__":
         elif event == 'Read':
             tag = values['-TAG-']
             ip = values['-IP-']
-            csv_enable = values['-CSV_ENABLE-']
-            csv_file = values['-CSV_FILE-']
+            csv_read_enabled = values['-CSV_READ-']
+            csv_write_enabled = values['-CSV_WRITE-']
+            csv_read_file = values['-CSV_READ_FILE-']
+            csv_write_file = values['-CSV_WRITE_FILE-']
 
             if ip != '':
                 if validate_ip(ip):
-                    if csv_enable:
-                        if csv_file != '':
-                            data = read_tag(str(ip), str(tag), store_to_csv=True, csv_name=str(csv_file))
+                    if csv_read_enabled:
+                        if csv_read_file != '':
+                            data = read_tag(str(ip), str(tag), store_to_csv=True, csv_name=str(csv_read_file))
                         else:
                             data = read_tag(str(ip), str(tag), store_to_csv=True)
                     else:
@@ -433,13 +446,15 @@ if __name__ == "__main__":
             tag = values['-TAG-']
             ip = values['-IP-']
             value = values['-VALUE-']
-            csv_enable = values['-CSV_ENABLE-']
-            csv_file = values['-CSV_FILE-']
+            csv_read_enabled = values['-CSV_READ-']
+            csv_write_enabled = values['-CSV_WRITE-']
+            csv_read_file = values['-CSV_READ_FILE-']
+            csv_write_file = values['-CSV_WRITE_FILE-']
 
             if ip != '':
                 if validate_ip(ip):
-                    if csv_enable:
-                        results = write_tags_from_csv(str(ip), str(csv_file))
+                    if csv_write_enabled:
+                        results = write_tags_from_csv(str(ip), str(csv_write_file))
                     else:
                         results = write_tag(str(ip), str(tag), str(value))
 
@@ -451,9 +466,12 @@ if __name__ == "__main__":
                     print('Please enter a valid IP address')
             else:
                 print('Please enter an IP address')
-        elif event == '-CSV_ENABLE-':
-            window['-CSV_FILE-'].update(disabled=not values['-CSV_ENABLE-'])
-            window['-CSV_FILE_BROWSE-'].update(disabled=not values['-CSV_ENABLE-'])
+        elif event == '-CSV_READ-':
+            window['-CSV_READ_FILE-'].update(disabled=not values['-CSV_READ-'])
+            window['-CSV_READ_FILE_BROWSE-'].update(disabled=not values['-CSV_READ-'])
+        elif event == '-CSV_WRITE-':
+            window['-CSV_WRITE_FILE-'].update(disabled=not values['-CSV_WRITE-'])
+            window['-CSV_WRITE_FILE_BROWSE-'].update(disabled=not values['-CSV_WRITE-'])
         elif event == 'Start Trend':
             if trender is None:
                 try:
