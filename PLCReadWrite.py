@@ -300,7 +300,6 @@ def read_tag(ip, tag, **kwargs):
                     tmp = crawl_and_format(t, parent, {})
                 else:
                     tmp = crawl_and_format(t, tag_name, {})
-                    print(data)
 
                 data = {'index': i}
 
@@ -456,8 +455,13 @@ if __name__ == "__main__":
 
                     print(f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S %p")}')
                     
-                    for key, value in data.items():
-                        print(f'Tag: {key} = {value}')
+                    if type(data) is list:
+                        for item in data:
+                            for key, value in item.items():
+                                print(f'Tag: {key} = {value}')
+                    else:
+                        for key, value in data.items():
+                            print(f'Tag: {key} = {value}')
 
                     save_history(ip, tag)
                 else:
