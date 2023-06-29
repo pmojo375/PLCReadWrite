@@ -6,6 +6,7 @@ import csv
 from ast import literal_eval
 import PySimpleGUI as sg
 import threading
+import datetime
 
 type_list = {}
 
@@ -129,19 +130,36 @@ def write_tags_from_csv(ip, csv_name):
         data = []
 
         # opening the CSV file
-        with open(csv_name, mode ='r') as file:   
+        with open(csv_name, mode ='r') as file:
         
             # reading the CSV file
             csvFile = csv.reader(file)
 
-            line = 0
+            line_count = 0
+
+            tags = []
+            values = []
+            convert_format = False
             
             # displaying the contents of the CSV file
-            for lines in csvFile:
-                if line != 0:
-                    data.append((lines[0], lines[1]))
+            for line in csvFile:
+                if line_count != 0:
+                    if convert_format == False:
+                        data.append((line[0], line[1]))
+                    else:
+                        for value in line:
+                            values.append(value)
+                elif (line[0] != 'tag' and line[1] != 'value') or len(line) > 2:
+                    # csv is in tag read format with the header as the tag names and the first line as the values
+                    convert_format = True
+                    tags = line
 
-                line = line + 1
+                line_count = line_count + 1
+
+            # if format had to be converted, convert the data to a list of tuples
+            if convert_format == True:
+                for i, tag in enumerate(tags):
+                    data.append((tag, values[i]))
 
             tags = []
 
@@ -350,6 +368,8 @@ class TagTrender:
     def read_tag(self, window):
         while not self.stop_event.is_set():
             result = self.plc.read(self.tag)
+            
+            window.write_event_value('-THREAD-', f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
             window.write_event_value('-THREAD-', result.value)
             self.stop_event.wait(self.interval)
     
@@ -433,6 +453,8 @@ if __name__ == "__main__":
                             data = read_tag(str(ip), str(tag), store_to_csv=True)
                     else:
                         data = read_tag(str(ip), str(tag))
+
+                    print(f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S %p")}')
                     
                     for key, value in data.items():
                         print(f'Tag: {key} = {value}')
