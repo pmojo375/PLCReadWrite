@@ -7,6 +7,8 @@ from ast import literal_eval
 import PySimpleGUI as sg
 import threading
 import datetime
+import matplotlib.pyplot as plt
+import numpy as np
 
 type_list = {}
 
@@ -398,14 +400,20 @@ class TagTrender:
         self.plc = LogixDriver(self.ip)
         self.plc.open()
         self.stop_event = threading.Event()
+        self.results = []
+        self.timestamps = []
         self.thread = None
 
     def read_tag(self, window):
+        start_time = datetime.datetime.now()
+
         while not self.stop_event.is_set():
             result = self.plc.read(self.tag)
             
             window.write_event_value('-THREAD-', f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
             window.write_event_value('-THREAD-', result.value)
+            self.results.append(result.value)
+            self.timestamps.append((datetime.datetime.now() - start_time).total_seconds() * 1000)
             self.stop_event.wait(self.interval)
     
     def stop(self):
@@ -448,6 +456,53 @@ tabs = [[header, sg.TabGroup([[
 window = sg.Window('PLC Tag Read/Write', tabs, size=(300, 433))
 
 trender = None
+
+from matplotlib.backend_bases import MouseEvent
+
+
+class SnappingCursor:
+    """
+    A cross-hair cursor that snaps to the data point of a line, which is
+    closest to the *x* position of the cursor.
+
+    For simplicity, this assumes that *x* values of the data are sorted.
+    """
+    def __init__(self, ax, line):
+        self.ax = ax
+        self.horizontal_line = ax.axhline(color='w', lw=0.8, ls='--')
+        self.vertical_line = ax.axvline(color='w', lw=0.8, ls='--')
+        self.x, self.y = line.get_data()
+        self._last_index = None
+        # text location in axes coords
+        self.text = ax.text(0.72, 0.9, '', transform=ax.transAxes, color='w')
+
+    def set_cross_hair_visible(self, visible):
+        need_redraw = self.horizontal_line.get_visible() != visible
+        self.horizontal_line.set_visible(visible)
+        self.vertical_line.set_visible(visible)
+        self.text.set_visible(visible)
+        return need_redraw
+
+    def on_mouse_move(self, event):
+        if not event.inaxes:
+            self._last_index = None
+            need_redraw = self.set_cross_hair_visible(False)
+            if need_redraw:
+                self.ax.figure.canvas.draw()
+        else:
+            self.set_cross_hair_visible(True)
+            x, y = event.xdata, event.ydata
+            index = min(np.searchsorted(self.x, x), len(self.x) - 1)
+            if index == self._last_index:
+                return  # still on the same data point. Nothing to do.
+            self._last_index = index
+            x = self.x[index]
+            y = self.y[index]
+            # update the line positions
+            self.horizontal_line.set_ydata([y])
+            self.vertical_line.set_xdata([x])
+            self.text.set_text('x=%1.2f, y=%1.2f' % (x, y))
+            self.ax.figure.canvas.draw()
 
 if __name__ == "__main__":
 
@@ -557,6 +612,29 @@ if __name__ == "__main__":
             else:
                 trender.stop()
                 window['Start Trend'].update('Start Trend')
+
+                fig, ax = plt.subplots(facecolor=(.18, .31, .31))
+                plot, = ax.plot(trender.timestamps, trender.results, 'wo', markersize=2)
+                snap_cursor = SnappingCursor(ax, plot)
+                fig.canvas.mpl_connect('motion_notify_event', snap_cursor.on_mouse_move)
+                ax.set_xlabel('Time (msec)', color='w')
+                ax.set_ylabel('Value', color='w')
+                ax.set_title(f'{values["-TAG-"]} Trend Results', color='w')
+                ax.tick_params(labelcolor='w', labelsize='medium', width=3)
+                ax.set_facecolor('k')
+                ax.grid()
+
+                min_val = min(trender.results)
+                max_val = max(trender.results)
+
+                range_val = max_val - min_val
+
+                spacing_val = range_val/30
+
+                ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
+
+                plt.show()
+
                 trender = None
         elif event == '-THREAD-':
             print(values['-THREAD-'])
