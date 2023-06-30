@@ -140,26 +140,64 @@ def write_tags_from_csv(ip, csv_name):
             tags = []
             values = []
             convert_format = False
+            is_array = False
+            index_num = []
+
+            tags_with_index = []
             
             # displaying the contents of the CSV file
             for line in csvFile:
+                # if not on header line
                 if line_count != 0:
                     if convert_format == False:
                         data.append((line[0], line[1]))
                     else:
-                        for value in line:
-                            values.append(value)
+                        if is_array:
+                            for i, value in enumerate(line):
+                                if i != 0:
+                                    values.append(value)
+                                else:
+                                    index_num.append(value)
+                # if on header line, check if format is the tag,value form or generated form from this app   
                 elif (line[0] != 'tag' and line[1] != 'value') or len(line) > 2:
                     # csv is in tag read format with the header as the tag names and the first line as the values
                     convert_format = True
-                    tags = line
+
+                    # set flag if CSV is for an array (index is first column if app generates array values from read to CSV feature)
+                    if line[0] == 'index':
+                        is_array = True
+
+                        # get the tags names excluding the index header column name
+                        for i, tag in enumerate(line):
+                            if i != 0:
+                                tags.append(tag)
+                    else:
+                        tags = line
 
                 line_count = line_count + 1
 
             # if format had to be converted, convert the data to a list of tuples
-            if convert_format == True:
-                for i, tag in enumerate(tags):
-                    data.append((tag, values[i]))
+            if convert_format:
+                if is_array:
+                    # loop through index numbers to append to tag names
+                    for index in index_num:
+                        for tag in tags:
+
+                            if '.' in tag:
+                                parent = re.match(r'[^.]*', tag)[0]
+                                child = re.search("\.(.*)", tag)[0]
+
+                                # fill new array with each tag name and the index appended to match the values count
+                                tags_with_index.append(f'{parent}[{index}]{child}')
+                            else:
+                                # fill new array with each tag name and the index appended to match the values count
+                                tags_with_index.append(f'{tag}[{index}]')
+                    # fill the data array with the tag value pairs (including the indexes)
+                    for i, tag in enumerate(tags_with_index):
+                        data.append((tag, values[i])) 
+                else:
+                    for i, tag in enumerate(tags):
+                        data.append((tag, values[i]))
 
             tags = []
 
@@ -168,8 +206,6 @@ def write_tags_from_csv(ip, csv_name):
 
                 tags.append((tag[0], value))
 
-            print(tags)
-            
             return plc.write(*tags)
 
 
