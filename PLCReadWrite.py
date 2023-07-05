@@ -634,6 +634,12 @@ if __name__ == "__main__":
                 ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
 
                 plt.show()
+                
+                with open(f'{values["-TAG-"]}_trend_results.csv', 'w', newline='') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(['Trend Duration', 'Value'])
+                    for i, val in enumerate(trender.results):
+                        writer.writerow([trender.timestamps[i], val])
 
                 trender = None
         elif event == '-THREAD-':
