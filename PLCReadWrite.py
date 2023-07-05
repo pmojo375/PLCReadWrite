@@ -635,11 +635,19 @@ if __name__ == "__main__":
 
                 plt.show()
                 
-                with open(f'{values["-TAG-"]}_trend_results.csv', 'w', newline='') as csvfile:
-                    writer = csv.writer(csvfile)
-                    writer.writerow(['Trend Duration', 'Value'])
-                    for i, val in enumerate(trender.results):
-                        writer.writerow([trender.timestamps[i], val])
+
+                if values['-CSV_READ-']:
+
+                    if values['-CSV_READ_FILE-'] != '':
+                        csvfile = values['-CSV_READ_FILE-']
+                    else:
+                        csvfile = f'{values["-TAG-"]}_trend_results.csv'
+
+                    with open(csvfile, 'w', newline='') as csvfile:
+                        writer = csv.writer(csvfile)
+                        writer.writerow(['Trend Duration', 'Value'])
+                        for i, val in enumerate(trender.results):
+                            writer.writerow([trender.timestamps[i], val])
 
                 trender = None
         elif event == '-THREAD-':
