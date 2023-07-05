@@ -433,13 +433,14 @@ sg.theme("DarkBlue")
 csv_read_tooltip = ' When checked, the read tag results will be stored to a CSV file. A file \n name can be inputted or one will be auto generated if left empty. '
 csv_write_tooltip = ' When checked, a CSV file containing tag/value pairs will be written to the PLC. \n The header must be "tag,value". A CSV filename must be specified to read from. '
 value_tooltip = ' When writing a tag, the value must be in the correct format. \n For example, a BOOL must be written as 1 (True) or 0 (False). \n UDTs must be written out in their full expanded names. \n For example: UDT.NestedUDT.TagName                     '
+csv_plot_tooltip = ' When checked, a plot of the tag values will \n be displayed after the trend is stopped. '
 
 header = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
           [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=40)]])]]
 
 read_tab = [[sg.Frame('CSV', [[sg.CB('Write Results To CSV', tooltip=csv_read_tooltip, key='-CSV_READ-', enable_events=True)],
             [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_READ_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_READ_FILE-', disabled=True, size=31)]])],
-            [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=40)]])],
+            [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=40)], [sg.CB('Show Trend Plot', tooltip=csv_plot_tooltip, key='-CSV_PLOT-', enable_events=True)]])],
             [sg.Column([[sg.Button('Read'), sg.Button('Start Trend'), sg.Button('Cancel')]], justification='r')]]
 
 write_tab = [[sg.Frame('CSV', [[sg.CB('Write From CSV', tooltip=csv_write_tooltip, key='-CSV_WRITE-', enable_events=True)],
@@ -613,28 +614,28 @@ if __name__ == "__main__":
                 trender.stop()
                 window['Start Trend'].update('Start Trend')
 
-                fig, ax = plt.subplots(facecolor=(.18, .31, .31))
-                plot, = ax.plot(trender.timestamps, trender.results, 'wo', markersize=2)
-                snap_cursor = SnappingCursor(ax, plot)
-                fig.canvas.mpl_connect('motion_notify_event', snap_cursor.on_mouse_move)
-                ax.set_xlabel('Time (msec)', color='w')
-                ax.set_ylabel('Value', color='w')
-                ax.set_title(f'{values["-TAG-"]} Trend Results', color='w')
-                ax.tick_params(labelcolor='w', labelsize='medium', width=3)
-                ax.set_facecolor('k')
-                ax.grid()
+                if values['-CSV_PLOT-']:
+                    fig, ax = plt.subplots(facecolor=(.18, .31, .31))
+                    plot, = ax.plot(trender.timestamps, trender.results, 'wo', markersize=2)
+                    snap_cursor = SnappingCursor(ax, plot)
+                    fig.canvas.mpl_connect('motion_notify_event', snap_cursor.on_mouse_move)
+                    ax.set_xlabel('Time (msec)', color='w')
+                    ax.set_ylabel('Value', color='w')
+                    ax.set_title(f'{values["-TAG-"]} Trend Results', color='w')
+                    ax.tick_params(labelcolor='w', labelsize='medium', width=3)
+                    ax.set_facecolor('k')
+                    ax.grid()
 
-                min_val = min(trender.results)
-                max_val = max(trender.results)
+                    min_val = min(trender.results)
+                    max_val = max(trender.results)
 
-                range_val = max_val - min_val
+                    range_val = max_val - min_val
 
-                spacing_val = range_val/30
+                    spacing_val = range_val/30
 
-                ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
+                    ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
 
-                plt.show()
-                
+                    plt.show()
 
                 if values['-CSV_READ-']:
 
