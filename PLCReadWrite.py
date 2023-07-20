@@ -316,6 +316,7 @@ def read_tag(ip, tag, **kwargs):
     csv_name = kwargs.get('csv_name', 'tag_values.csv')
 
     with LogixDriver(ip) as plc:
+
         ret = plc.read(tag)
 
         # tag is an array and we are wanting more than one result in the array
@@ -392,6 +393,48 @@ def validate_ip(ip):
 
 
 # This function will read a tag value pair from the PLC at a set interval
+class TagMonitor:
+    def __init__(self, ip, tag):
+        self.ip = ip
+        self.tag = tag
+        self.interval = .1
+        self.plc = LogixDriver(self.ip)
+        self.plc.open()
+        self.stop_event = threading.Event()
+        self.results = []
+        self.timestamps = []
+        self.hold = False
+        self.thread = None
+
+    def read_tag(self, window):
+
+        while not self.stop_event.is_set():
+            result = self.plc.read(self.tag)
+
+            if result.value == 1 and self.hold == False:
+                print('Tag High')
+                self.hold = True
+                window.write_event_value('-THREAD-', f'Tag High at Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+            
+            if result.value == 0:
+                self.hold = False
+
+            self.stop_event.wait(self.interval)
+    
+    def stop(self):
+        if self.thread is not None:
+            self.stop_event.set()
+
+    def set_tag(self, tag):
+        self.tag = tag
+
+    def run(self, window):
+        self.stop_event.clear()
+        self.thread = threading.Thread(target=self.read_tag, args=(window,))
+        self.thread.start()
+
+
+# This function will read a tag value pair from the PLC at a set interval
 class TagTrender:
     def __init__(self, ip, tag, interval=1):
         self.ip = ip
@@ -441,7 +484,8 @@ header = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
 read_tab = [[sg.Frame('CSV', [[sg.CB('Write Results To CSV', tooltip=csv_read_tooltip, key='-CSV_READ-', enable_events=True)],
             [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_READ_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_READ_FILE-', disabled=True, size=31)]])],
             [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=40)], [sg.CB('Show Trend Plot', tooltip=csv_plot_tooltip, key='-CSV_PLOT-', enable_events=True)]])],
-            [sg.Column([[sg.Button('Read'), sg.Button('Start Trend'), sg.Button('Cancel')]], justification='r')]]
+            [sg.Column([[sg.Button('Read'), sg.Button('Start Monitor'), sg.Button('Cancel')]], justification='r')],
+            [sg.Column([[sg.Button('Start Trend'), sg.Button('Show Trend Plot')]], justification='r')]]
 
 write_tab = [[sg.Frame('CSV', [[sg.CB('Write From CSV', tooltip=csv_write_tooltip, key='-CSV_WRITE-', enable_events=True)],
              [sg.FileBrowse('Browse', file_types=(('CSV Files', '*.csv'),), key='-CSV_WRITE_FILE_BROWSE-', disabled=True), sg.InputText(key='-CSV_WRITE_FILE-', disabled=True, size=31)]])],
@@ -454,9 +498,10 @@ tabs = [[header, sg.TabGroup([[
     sg.Tab('Read', read_tab), sg.Tab('Write', write_tab)]])], footer]
 
 # Create the Window
-window = sg.Window('PLC Tag Read/Write', tabs, size=(300, 433))
+window = sg.Window('PLC Tag Read/Write', tabs, size=(300, 500))
 
 trender = None
+monitorer = None
 
 from matplotlib.backend_bases import MouseEvent
 
@@ -535,6 +580,11 @@ if __name__ == "__main__":
             csv_read_file = values['-CSV_READ_FILE-']
             csv_write_file = values['-CSV_WRITE_FILE-']
 
+            # create a list of tags if there are multiple tags
+            if ',' in tag:
+                pattern = ",\s*"
+                tag = re.split(pattern, tag)
+
             if ip != '':
                 if validate_ip(ip):
                     if csv_read_enabled:
@@ -591,6 +641,75 @@ if __name__ == "__main__":
         elif event == '-CSV_WRITE-':
             window['-CSV_WRITE_FILE-'].update(disabled=not values['-CSV_WRITE-'])
             window['-CSV_WRITE_FILE_BROWSE-'].update(disabled=not values['-CSV_WRITE-'])
+        elif event == 'Show Trend Plot':
+            if trender is None:
+                print('No data to display!')
+            else:
+                # if multiple results they will be dicts, plot each result in a separate subplot
+                if type(trender.results[0]) == dict:
+
+                    keys = [key for key in trender.results[0].keys()]
+
+                    results_len = len(keys)
+
+                    # create figure with subplots
+                    fig, axs = plt.subplots(results_len, sharex=True, facecolor=(.18, .31, .31))
+
+                    fig.suptitle(f'{values["-TAG-"]} Trend Results', color='w')
+                    axis = []
+
+                    for i in range(results_len):
+
+                        dict_values = [value[keys[i]] for value in trender.results]
+
+                        axs[i].plot(trender.timestamps, dict_values, 'wo', markersize=1)
+
+                        axs[i].set_ylabel(keys[i], color='w')
+                        axs[i].set_facecolor('k')
+                        axs[i].tick_params(labelcolor='w', labelsize='medium', width=3)
+                        axs[i].grid()
+
+                    
+                    fig.tight_layout()
+                    fig.align_ylabels()
+
+                else:
+                    fig, ax = plt.subplots(facecolor=(.18, .31, .31))
+                    plot, = ax.plot(trender.timestamps, trender.results, 'wo', markersize=2)
+                    snap_cursor = SnappingCursor(ax, plot)
+                    fig.canvas.mpl_connect('motion_notify_event', snap_cursor.on_mouse_move)
+                    ax.set_xlabel('Time (msec)', color='w')
+                    ax.set_ylabel('Value', color='w')
+                    ax.set_title(f'{values["-TAG-"]} Trend Results', color='w')
+                    ax.tick_params(labelcolor='w', labelsize='medium', width=3)
+                    ax.set_facecolor('k')
+                    ax.grid()
+
+                    min_val = min(trender.results)
+                    max_val = max(trender.results)
+
+                    range_val = max_val - min_val
+
+                    spacing_val = range_val/30
+
+                    ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
+
+                plt.show()
+        elif event == 'Start Monitor':
+            if monitorer is None:
+                try:
+                    save_history(values['-IP-'], values['-TAG-'])
+                    monitorer = TagMonitor(values['-IP-'], values['-TAG-'])
+                    monitorer.run(window)
+                    print(f'Monitoring tag {values["-TAG-"]}...')
+                    window['Start Monitor'].update('Stop Monitor')
+                except ValueError:
+                    print('Please enter a valid IP address')
+            else:
+                monitorer.stop()
+                window['Start Monitor'].update('Start Monitor')
+
+                monitorer = None
         elif event == 'Start Trend':
             if trender is None:
                 try:
@@ -615,25 +734,54 @@ if __name__ == "__main__":
                 window['Start Trend'].update('Start Trend')
 
                 if values['-CSV_PLOT-']:
-                    fig, ax = plt.subplots(facecolor=(.18, .31, .31))
-                    plot, = ax.plot(trender.timestamps, trender.results, 'wo', markersize=2)
-                    snap_cursor = SnappingCursor(ax, plot)
-                    fig.canvas.mpl_connect('motion_notify_event', snap_cursor.on_mouse_move)
-                    ax.set_xlabel('Time (msec)', color='w')
-                    ax.set_ylabel('Value', color='w')
-                    ax.set_title(f'{values["-TAG-"]} Trend Results', color='w')
-                    ax.tick_params(labelcolor='w', labelsize='medium', width=3)
-                    ax.set_facecolor('k')
-                    ax.grid()
+                    # if multiple results they will be dicts, plot each result in a separate subplot
+                    if type(trender.results[0]) == dict:
 
-                    min_val = min(trender.results)
-                    max_val = max(trender.results)
+                        keys = [key for key in trender.results[0].keys()]
 
-                    range_val = max_val - min_val
+                        results_len = len(keys)
 
-                    spacing_val = range_val/30
+                        # create figure with subplots
+                        fig, axs = plt.subplots(results_len, sharex=True, facecolor=(.18, .31, .31))
 
-                    ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
+                        fig.suptitle(f'{values["-TAG-"]} Trend Results', color='w')
+                        axis = []
+
+                        for i in range(results_len):
+
+                            dict_values = [value[keys[i]] for value in trender.results]
+
+                            axs[i].plot(trender.timestamps, dict_values, 'wo', markersize=1)
+
+                            axs[i].set_ylabel(keys[i], color='w')
+                            axs[i].set_facecolor('k')
+                            axs[i].tick_params(labelcolor='w', labelsize='medium', width=3)
+                            axs[i].grid()
+
+                        
+                        fig.tight_layout()
+                        fig.align_ylabels()
+
+                    else:
+                        fig, ax = plt.subplots(facecolor=(.18, .31, .31))
+                        plot, = ax.plot(trender.timestamps, trender.results, 'wo', markersize=2)
+                        snap_cursor = SnappingCursor(ax, plot)
+                        fig.canvas.mpl_connect('motion_notify_event', snap_cursor.on_mouse_move)
+                        ax.set_xlabel('Time (msec)', color='w')
+                        ax.set_ylabel('Value', color='w')
+                        ax.set_title(f'{values["-TAG-"]} Trend Results', color='w')
+                        ax.tick_params(labelcolor='w', labelsize='medium', width=3)
+                        ax.set_facecolor('k')
+                        ax.grid()
+
+                        min_val = min(trender.results)
+                        max_val = max(trender.results)
+
+                        range_val = max_val - min_val
+
+                        spacing_val = range_val/30
+
+                        ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
 
                     plt.show()
 
@@ -644,11 +792,24 @@ if __name__ == "__main__":
                     else:
                         csvfile = f'{values["-TAG-"]}_trend_results.csv'
 
+                    if type(trender.results[0]) == dict:
+                        # get keys from first dict in list
+                        keys = ['Trend Duration']
+                        keys = keys + [key for key in trender.results[0].keys()]
+                    else:
+                        keys = ['Trend Duration', 'Value']
+
                     with open(csvfile, 'w', newline='') as csvfile:
                         writer = csv.writer(csvfile)
-                        writer.writerow(['Trend Duration', 'Value'])
+                        writer.writerow(keys)
                         for i, val in enumerate(trender.results):
-                            writer.writerow([trender.timestamps[i], val])
+                            if type(val) == dict:
+                                row = [trender.timestamps[i], ]
+                                for key in keys[1:]:
+                                    row.append(val[key])
+                                writer.writerow(row)
+                            else:
+                                writer.writerow([trender.timestamps[i], val])
 
                 trender = None
         elif event == '-THREAD-':
