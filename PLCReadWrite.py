@@ -20,15 +20,31 @@ import numpy as np
 - Need UDT with nested UDTs and arrays of them
 - Need UDT with native nested UDTs and arrays of them
 
-
 - BOOL, DINT, INT, REAL, SINT, STRING
 - BOOL[2], DINT[2], INT[2], REAL[2], SINT[2], STRING[2]
+- Tag(tag='zzzDint', value=0, type='DINT', error=None)
+    - single value
+- Tag(tag='zzzDintArray', value=[1, 2, 3, 4, 5], type='DINT[5]', error=None)
+    - list value
 - TIMER, COUNTER, CONTROL
 - TIMER[2], COUNTER[2], CONTROL[2]
 - UDT, UDT[2]
+- Tag(tag='zzzUDT', value={'Status': 0, 'RejectCode': 0, 'Model': {'Name': '', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': False, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, type='PalletData', error=None)
+    - Dict value for UDT
+- Tag(tag='zzzUDTArray', value=[{'Status': 1, 'RejectCode': 0, 'Model': {'Name': 'Test', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': True, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, {'Status': 2, 'RejectCode': 0, 'Model': {'Name': 'Test', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': True, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, {'Status': 3, 'RejectCode': 0, 'Model': {'Name': 'Test', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': False, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, {'Status': 4, 'RejectCode': 0, 'Model': {'Name': '', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': False, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, {'Status': 5, 'RejectCode': 0, 'Model': {'Name': '', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': False, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}], type='PalletData[5]', error=None)
+    - List of Dict value for UDT list
 - UDT.NestedUDT, UDT.NestedUDT[2]
 '''
 type_list = {}
+
+# gets the result type of the tag read
+def determine_type_read(result):
+    if result:
+        value = result.value
+
+        return type(value)
+    else:
+        print('Tag read error!')
 
 # This function will crawl through a dictionary and format the data
 def crawl_and_format(obj, name, data):
@@ -233,74 +249,18 @@ def write_tags_from_csv(ip, csv_name):
             csvFile = csv.reader(file)
 
             line_count = 0
-
             tags = []
-            values = []
-            convert_format = False
-            is_array = False
-            index_num = []
-
-            tags_with_index = []
             
             # displaying the contents of the CSV file
             for line in csvFile:
                 # if not on header line
                 if line_count != 0:
-                    if convert_format == False:
-                        data.append((line[0], line[1]))
-                    else:
-                        if is_array:
-                            for i, value in enumerate(line):
-                                if i != 0:
-                                    values.append(value)
-                                else:
-                                    index_num.append(value)
-                # if on header line, check if format is the tag,value form or generated form from this app   
-                elif (line[0] != 'tag' and line[1] != 'value') or len(line) > 2:
-                    # csv is in tag read format with the header as the tag names and the first line as the values
-                    convert_format = True
-
-                    # set flag if CSV is for an array (index is first column if app generates array values from read to CSV feature)
-                    if line[0] == 'index':
-                        is_array = True
-
-                        # get the tags names excluding the index header column name
-                        for i, tag in enumerate(line):
-                            if i != 0:
-                                tags.append(tag)
-                    else:
-                        tags = line
+                    data.append((line[0], line[1]))
 
                 line_count = line_count + 1
 
-            # if format had to be converted, convert the data to a list of tuples
-            if convert_format:
-                if is_array:
-                    # loop through index numbers to append to tag names
-                    for index in index_num:
-                        for tag in tags:
-
-                            if '.' in tag:
-                                parent = re.match(r'[^.]*', tag)[0]
-                                child = re.search("\.(.*)", tag)[0]
-
-                                # fill new array with each tag name and the index appended to match the values count
-                                tags_with_index.append(f'{parent}[{index}]{child}')
-                            else:
-                                # fill new array with each tag name and the index appended to match the values count
-                                tags_with_index.append(f'{tag}[{index}]')
-                    # fill the data array with the tag value pairs (including the indexes)
-                    for i, tag in enumerate(tags_with_index):
-                        data.append((tag, values[i])) 
-                else:
-                    for i, tag in enumerate(tags):
-                        data.append((tag, values[i]))
-
-            tags = []
-
             for tag in data:
                 value = set_data_type(tag[1])
-
                 tags.append((tag[0], value))
 
             return plc.write(*tags)
