@@ -1,5 +1,4 @@
-This script pulls PLC tag data from an Allen Bradley PLC into a csv file.
-It can also write from a CSV file if needed. A GUI is in the works to make the script more user friendly.
+This program is a GUI that allows you to read and write to an Allen Bradley PLC. It has the ability to read tags and write the results to a JSON file and write tags from data in a JSON file as well.
 
 Additional work will be done to add and improve the features as time goes on.
 
@@ -10,86 +9,15 @@ Take a look at their work here: https://github.com/ottowayi/pycomm3
 
 When the GUI opens up you will have a few areas to input information:
   - IP Address: Enter the PLC IP address here.
-  - Enable CSV Read/Write: Check this box to enable CSV functionality. When reading from the PLC while enabled, your results will output to a CSV file. When writing to the PLC, tag/value pairs will be read from a CSV file and each tag will have its value written to it.
-  - Browse: Click this to browse for your CSV file. When one is selected, its path will be written to the text box to the right of this button. You may also type a path driectly to the text box. Paths can be relative. For example, if running the script in a folder that also contains a tags.csv file, you may just type "tags.csv" in the text box.
-  - Tag: When CSV read/write is disabled and you are writing to the PLC, this is the tag that will be written to. When reading, this will be the tag that you read reguardless of whether you have CSV read/write enabled or not.
-  - Value: When you have CSV read/write disabled and you are writing to the PLC, this is the value you are writing. When reading this has no use and may be left empty reguardless if CSV read/write is on or not.
+  - Enable JSON Read/Write: Check this box to enable JSON functionality. When reading from the PLC while enabled, your results will output to a JSON file. When writing to the PLC, tags and values will be read from a JSON file and each tag will have its value written to it.
+  - Browse: Click this to browse for your JSON file. When one is selected, its path will be written to the text box to the right of this button. You may also type a path driectly to the text box. Paths can be relative. For example, if running the script in a folder that also contains a tags.json file, you may just type "tags.json" in the text box.
+  - Tag: When JSON read/write is disabled and you are writing to the PLC, this is the tag that will be written to. When reading, this will be the tag that you read reguardless of whether you have CSV read/write enabled or not.
+  - Value: When you have JSON read/write disabled and you are writing to the PLC, this is the value you are writing. When reading this has no use and may be left empty reguardless if JSON read/write is on or not.
   - Results: This is where your results will be printed. It will tell you if there are any issues as well with the read/write or if any information was not entered or entered incorrectly.
   - Read: If everything is inputted correctly, this will read a tag from the PLC.
   - Write: If everthing is inputted correctly, this will write a tag/value pair to the PLC or read tag/value pairs from a CSV to write.
   - Cancel: Closes the window.
-
-FUNCTIONS
-
-simplest_type
-  - This function takes a string (read from CSVs in this context) and converts it to whatever type it appears to be. For example, it would convert a '1' to an int of 1.
-    - Inputs:
-      - s: STRING = The string that you want to convert the type of
-    - Outputs:
-      - ANY = The value in its infered type
-
-find_atributes
-  - This function gets a list of all the data types and lists out their attributes and prints them
-    - Inputs:
-      - ip: STRING = The PLCs IP address
-    - Outputs:
-      - NONE
-
-trend_tag
-  - This function trends a tag at a 50ms rate. The rate will vary but be somewhat close to the 50ms target. It can output to a CSV as well. Use CTRL + C to stop the trend.
-    - Inputs:
-      - ip: STRING = The PLCs IP address in string format
-      - tag STRING = The tag you want to read. For arrays, put {x} at the end to read x elements.
-      - store_to_csv: BOOL (optional) = When true the data is saved to a csv file.
-    - Outputs:
-      - NONE
-
-write_csv
-  - This is a helper function to write the results of a dictionary or list of dictionaries to a CSV.
-    - Inputs:
-      - csv_name: STRING = The name of the csv file that is going to be created.
-      - data: DICT or LIST[DICT] = The data you are writing to the CSV.
-    - Outputs
-      - NONE
-
-write_tag
-  - This function writes to a tag. It is used to write to a single tag only. It cannot write to a UDT or complex type at the moment.
-    - Inputs:
-      - ip: STRING = The PLCs IP address in string format
-      - tag STRING = The tag you want to write to. Must be a single tag. Arrays should be written as a single element and UDTs can only be written to at the element level.
-      - value: STRING = The value to write. Bools will accept 1 for true and 0 for false and other data types will be converted to the type that makes the most sense. So a '1' will be an int and a '3.4' will be a float.
-    - Outputs:
-      - TAG = The pycomm3 tag structure result from the write call.
-
-write_tags_from_csv
-  - This function does the same as the write_tag function but reads the values and tags from a CSV file. The CSV file must have the header "tag, value". Bools will accept a 1 or 0 for true and false and ints and floats will be converted. This unfortunatly means you cannot write a '1' string to a string as it will be converted. UDTs must be expanded to their lowest elements and not written to as a whole. For example, if your UDT has two child elements, tag1 and tag2, it must be in the CSV as UDT.tag1 and UDT.tag2.
-    - Inputs:
-      - ip: STRING = The PLCs IP address in string format
-      - csv_name: STRING = The name of the CSV file you want to read. Must be present in the folder containing the script.
-    - Outputs:
-      - LIST[TAG] = A list of the pycomm3 tag structure result from the write calls.
-
-crawl_and_format
-  - This function formats the output of a read tag into an easy to read format.
-    - Inputs:
-      - obj: ANY = This is the variable you want to format.
-      - name STRING = The parent name of the tag you are formatting.
-      - data: DICT = What the formatted data is appended to.
-    - Outputs:
-      - DICT = The formatted dictionary
-
-read_tag
-  - This function reads a plc tag and can store the results to a csv file.
-    - Inputs:
-      - ip: STRING = The PLCs IP address in string format
-      - tag STRING = The tag you want to read. For arrays, put {x} at the end to read x elements.
-      - store_to_csv: BOOL (optional) = When true the data is saved to a csv file.
-      - csv_name: STRING (optional) = The name of the csv file you want to create (must add .csv to string). 
-                                      Defaults to csv_file.csv.
-      - plc: LogixDriver (optional) = The LogixDriver object from the pycomm3 library. Speeds things up if you are
-                                      reading in a loop.
-    - Outputs:
-      - DICT = A dict with the tag values
+  - NEED TO UPDATE TO INCLUDE NEW FEATURES
 
 INSTALLATION
 
@@ -110,7 +38,7 @@ INSTALLATION
   - When you are done you can deactivate the virtual enviroment by running the command deactivate
 - Install Libraries
   - In the directory, run the following (without quotes):
-    - "python -m pip install -r requirements.txt"
+    - "python -m pip install -r requirements.txt" (NEED TO UPDATE THIS FILE)
   - The libraries may take a minute to install
 - Run Script
   - From the project directory, run the following command (without quotes):
@@ -120,10 +48,6 @@ INSTALLATION
     - Single tags can be entered as you would assume. If you want to read a specific array member add [x] to the end
     - If you want to read a whole array of size x, after the tag name type {x} where x is the number of elements to read
     - Press enter to run the script.
-  - Data will be in a CSV file called "part_history.csv"
+  - Data will be in a JSON file called "part_history.json"
 - Repeat the last step as needed. The installing python step, virtual environment and installing libraries steps only need to be done on the first run
   - You will need to activate the venv though everytime unless it is still activated.
-
-NOTES
-
-If you are running the main function, it will default to save as a csv and the name of the file will be "tags.csv".
