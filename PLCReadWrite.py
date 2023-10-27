@@ -247,37 +247,6 @@ def set_data_type(value, tag):
         return None
 
 
-def trend_tag(ip, tag, **kwargs):
-    store_to_csv = kwargs.get('store_to_csv', False)
-    data = []
-    last = 0
-    last_read = time.time()
-    with LogixDriver(ip) as plc:
-        print('Ctrl + C Stops Trend')
-        time.sleep(3)
-        try:
-            while True:
-                if time.time() - last_read >= .047:
-                    x = read_tag(ip, tag, csv_name = 'trend.csv', store_to_csv = False, plc = plc)
-                    end_time = time.time()
-                    print(int(x['Time2'])- last)
-                    last = int(x['Time2'])
-                    data.append([time.time() - last_read, int(x['Time2'])])
-                    last_read = time.time()
-                else:
-                    pass
-
-        except KeyboardInterrupt:
-            print('Stopping Trend')
-            with open('trend.csv', 'w', newline='') as f:
-                
-                # using csv.writer method from CSV package
-                write = csv.writer(f)
-                
-                write.writerow(['time', 'tag'])
-                write.writerows(data)
-
-
 # This function will write a CSV file
 def write_csv(csv_name, data):
     if type(data) == list:
