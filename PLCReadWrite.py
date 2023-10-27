@@ -1,8 +1,6 @@
 from pycomm3 import LogixDriver
 import re
 import pickle
-import time
-import pandas as pd
 import csv
 from ast import literal_eval
 import PySimpleGUI as sg
@@ -14,6 +12,7 @@ import json
 
 tag_list_retrieved = False
 tag_list = []
+type_list = {}
 
 # serializes the returned tag or list of tags to json format and writes to a file
 def deserialize_from_json():
@@ -122,31 +121,6 @@ def get_tags_from_json(ip):
     return ret
 
 
-'''
-- Get all tag return types for offline testing
-- Need each native type
-- Need each array type of each native type
-- Need native UDT type (timer, counter, etc.)
-- Need UDT type with each native type and an array of each native type
-- Need UDT with nested UDTs and arrays of them
-- Need UDT with native nested UDTs and arrays of them
-
-- BOOL, DINT, INT, REAL, SINT, STRING
-- BOOL[2], DINT[2], INT[2], REAL[2], SINT[2], STRING[2]
-- Tag(tag='zzzDint', value=0, type='DINT', error=None)
-    - single value
-- Tag(tag='zzzDintArray', value=[1, 2, 3, 4, 5], type='DINT[5]', error=None)
-    - list value
-- TIMER, COUNTER, CONTROL
-- TIMER[2], COUNTER[2], CONTROL[2]
-- UDT, UDT[2]
-- Tag(tag='zzzUDT', value={'Status': 0, 'RejectCode': 0, 'Model': {'Name': '', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': False, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, type='PalletData', error=None)
-    - Dict value for UDT
-- Tag(tag='zzzUDTArray', value=[{'Status': 1, 'RejectCode': 0, 'Model': {'Name': 'Test', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': True, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, {'Status': 2, 'RejectCode': 0, 'Model': {'Name': 'Test', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': True, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, {'Status': 3, 'RejectCode': 0, 'Model': {'Name': 'Test', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': False, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, {'Status': 4, 'RejectCode': 0, 'Model': {'Name': '', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': False, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}, {'Status': 5, 'RejectCode': 0, 'Model': {'Name': '', 'ModelNum': '', 'UpperTSNum': '', 'LowerTSNum': '', 'Carton': '', 'ColorCode': 0, 'BaseType': 0, 'SNType': 0, 'CartonHeight': 0, 'UPC': '', 'InstallationKit': '', 'Base': '', 'IsRibbed': False, 'GetsSensomaticTag': False, 'SpoutLabel': False}, 'IntialPalletNum': 0, 'FinalPalletNum': 0, 'TrimshellScrews': [{'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}, {'Torque': 0.0, 'Angle': 0.0}], 'TrimshellStation': 0, 'LabelerStation': 0, 'UnitData': {'Matrix': '', 'SN': ''}}], type='PalletData[5]', error=None)
-    - List of Dict value for UDT list
-- UDT.NestedUDT, UDT.NestedUDT[2]
-'''
-type_list = {}
 
 # This function will crawl through a dictionary and format the data
 def crawl_and_format(obj, name, data):
@@ -462,8 +436,8 @@ class TagTrender:
 
 sg.theme("DarkBlue")
 
-json_read_tooltip = ' When checked, the read tag results will be stored to a CSV file. A file \n name can be inputted or one will be auto generated if left empty. '
-json_write_tooltip = ' When checked, a CSV file containing tag/value pairs will be written to the PLC. \n The header must be "tag,value". A CSV filename must be specified to read from. '
+json_read_tooltip = ' When checked, the read tag results will be stored to a JSON file. A file \n name can be inputted or one will be auto generated if left empty. '
+json_write_tooltip = ' When checked, a JSON file will be written to the PLC. \n A JSON filename must be specified to read from. '
 value_tooltip = ' When writing a tag, the value must be in the correct format. \n For example, a BOOL must be written as 1 (True) or 0 (False). \n UDTs must be written out in their full expanded names. \n For example: UDT.NestedUDT.TagName                     '
 json_plot_tooltip = ' When checked, a plot of the tag values will \n be displayed after the trend is stopped. '
 
