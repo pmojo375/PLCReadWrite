@@ -1,4 +1,4 @@
-This program is a GUI that allows you to read and write to an Allen Bradley PLC. It has the ability to read tags and write the results to a JSON file and write tags from data in a JSON file as well.
+This program is a GUI that allows you to read and write to an Allen Bradley PLC. It has the ability to read tags and write the results to a YAML file and write tags from data in a YAML file as well.
 
 Additional work will be done to add and improve the features as time goes on.
 
@@ -9,10 +9,10 @@ Take a look at their work here: https://github.com/ottowayi/pycomm3
 
 When the GUI opens up you will have a few areas to input information:
   - IP Address: Enter the PLC IP address here.
-  - Enable JSON Read/Write: Check this box to enable JSON functionality. When reading from the PLC while enabled, your results will output to a JSON file. When writing to the PLC, tags and values will be read from a JSON file and each tag will have its value written to it.
-  - Browse: Click this to browse for your JSON file. When one is selected, its path will be written to the text box to the right of this button. You may also type a path driectly to the text box. Paths can be relative. For example, if running the script in a folder that also contains a tags.json file, you may just type "tags.json" in the text box.
-  - Tag: When JSON read/write is disabled and you are writing to the PLC, this is the tag that will be written to. When reading, this will be the tag that you read reguardless of whether you have CSV read/write enabled or not.
-  - Value: When you have JSON read/write disabled and you are writing to the PLC, this is the value you are writing. When reading this has no use and may be left empty reguardless if JSON read/write is on or not.
+  - Enable YAML Read/Write: Check this box to enable YAML functionality. When reading from the PLC while enabled, your results will output to a YAML file. When writing to the PLC, tags and values will be read from a YAML file and each tag will have its value written to it.
+  - Browse: Click this to browse for your YAML file. When one is selected, its path will be written to the text box to the right of this button. You may also type a path driectly to the text box. Paths can be relative. For example, if running the script in a folder that also contains a tags.yaml file, you may just type "tags.yaml" in the text box.
+  - Tag: When YAML read/write is disabled and you are writing to the PLC, this is the tag that will be written to. When reading, this will be the tag that you read reguardless of whether you have CSV read/write enabled or not.
+  - Value: When you have YAML read/write disabled and you are writing to the PLC, this is the value you are writing. When reading this has no use and may be left empty reguardless if YAML read/write is on or not.
   - Results: This is where your results will be printed. It will tell you if there are any issues as well with the read/write or if any information was not entered or entered incorrectly.
   - Read: If everything is inputted correctly, this will read a tag from the PLC.
   - Write: If everthing is inputted correctly, this will write a tag/value pair to the PLC or read tag/value pairs from a CSV to write.
@@ -48,6 +48,6 @@ INSTALLATION
     - Single tags can be entered as you would assume. If you want to read a specific array member add [x] to the end
     - If you want to read a whole array of size x, after the tag name type {x} where x is the number of elements to read
     - Press enter to run the script.
-  - Data will be in a JSON file called "part_history.json"
+  - Data will be in a YAML file called "part_history.yaml"
 - Repeat the last step as needed. The installing python step, virtual environment and installing libraries steps only need to be done on the first run
   - You will need to activate the venv though everytime unless it is still activated.

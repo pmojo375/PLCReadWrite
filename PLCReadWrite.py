@@ -8,22 +8,23 @@ import threading
 import datetime
 import matplotlib.pyplot as plt
 import numpy as np
-import json
+import yaml
 
 tag_list_retrieved = False
 tag_list = []
 type_list = {}
 
-# serializes the returned tag or list of tags to json format and writes to a file
-def deserialize_from_json():
-    with open('tag_values.json', 'r') as f:
-        json_data = json.load(f)
+# serializes the returned tag or list of tags to yaml format and writes to a file
+def deserialize_from_yaml():
+    with open('tag_values.yaml', 'r') as f:
+        yaml_data = yaml.safe_load(f)
         tag_values = []
-        for item in json_data:
+        for item in yaml_data:
             for key, value in item.items():
                 tag_values.append({'tag': key, 'value': value})
     
     return tag_values
+
 
 def iterate_value(name, value, ret):
     if type(value) == list:
@@ -38,7 +39,7 @@ def iterate_value(name, value, ret):
     return ret
 
 
-def process_json_read(data):
+def process_yaml_read(data):
 
     processed_data = []
 
@@ -51,31 +52,31 @@ def process_json_read(data):
     return processed_data
 
 
-# serializes the returned tag or list of tags to json format and writes to a file
-def serialize_to_json(data):
-    with open('tag_values.json', 'w') as f:
+# serializes the returned tag or list of tags to yaml format and writes to a file
+def serialize_to_yaml(data):
+    with open('tag_values.yaml', 'w') as f:
 
-        json_data = []
+        yaml_data = []
 
         if isinstance(data, list):
             for tag in data:
                 if isinstance(tag.value, list):
                     for i, value in enumerate(tag.value):
-                        json_data.append({f'{tag.tag}[{str(i)}]': value})
+                        yaml_data.append({f'{tag.tag}[{str(i)}]': value})
                 else:
-                    json_data.append({tag.tag: tag.value})
+                    yaml_data.append({tag.tag: tag.value})
         else:
-            json_data.append({tag.tag: tag.value})
+            yaml_data.append({tag.tag: tag.value})
 
-        json.dump(json_data, f, indent=4)
+        yaml.safe_dump(yaml_data, f, default_flow_style=False)
 
 
 def process_structure(structure, array, name):
     """
-    Recursively processes the structure of the JSON data and appends the data types to the array.
+    Recursively processes the structure of the YAML data and appends the data types to the array.
 
     Args:
-        structure (dict): The structure of the JSON data.
+        structure (dict): The structure of the YAML data.
         array (list): The list to append the data types to.
         name (str): The name of the current tag.
 
@@ -95,12 +96,12 @@ def process_structure(structure, array, name):
     return array
 
 
-def get_tags_from_json(ip):
+def get_tags_from_yaml(ip):
     """
-    Gets the data types from the JSON data.
+    Gets the data types from the YAML data.
 
     Args:
-        data (dict): The JSON data.
+        data (dict): The YAML data.
 
     Returns:
         list: The list of data types.
@@ -108,7 +109,7 @@ def get_tags_from_json(ip):
     ret = {}
     
     with LogixDriver(ip) as plc:
-        data = plc.tags_json
+        data = plc.tags_yaml
     
     for tag_name in data.keys():
         tag = data[tag_name]
@@ -119,7 +120,6 @@ def get_tags_from_json(ip):
             ret = process_structure(internal_tags, ret, tag_name)
 
     return ret
-
 
 
 # This function will crawl through a dictionary and format the data
@@ -242,23 +242,23 @@ def write_tag(ip, tag, value, **kwargs):
 
 
 # Writes tag value pairs read from a CSV file
-def write_tags_from_json(ip, json_name):
+def write_tags_from_yaml(ip, yaml_name):
 
     with LogixDriver(ip) as plc:
-        tags = process_json_read(deserialize_from_json())
+        tags = process_yaml_read(deserialize_from_yaml())
 
         return plc.write(*tags)
 
 
 # UNUSED
 # This function will read tags from a CSV file and store them in a CSV file if desired
-def read_tag_from_json(ip, json_name, **kwargs):
-    store_to_json = kwargs.get('store_to_json', False)
+def read_tag_from_yaml(ip, yaml_name, **kwargs):
+    store_to_yaml = kwargs.get('store_to_yaml', False)
 
     data = []
 
     # opening the CSV file
-    with open(json_name, mode ='r') as file:   
+    with open(yaml_name, mode ='r') as file:   
         
         # reading the CSV file
         csvFile = csv.reader(file)
@@ -273,29 +273,29 @@ def read_tag_from_json(ip, json_name, **kwargs):
             line = line + 1
 
     for tag in data:
-        read_tag(ip, tag, store_to_csv = store_to_json)
+        read_tag(ip, tag, store_to_csv = store_to_yaml)
 
 
 # This function will read a tag value pair from the PLC
 def read_tag(ip, tags, **kwargs):
 
-    store_to_json = kwargs.get('store_to_json', False)
+    store_to_yaml = kwargs.get('store_to_yaml', False)
 
     return_data = []
     tmp = []
     data = {}
 
-    json_name = kwargs.get('json_name', 'tag_values.csv')
+    yaml_name = kwargs.get('yaml_name', 'tag_values.csv')
 
     with LogixDriver(ip) as plc:
 
         ret = plc.read(*tags)
 
-        if store_to_json:
+        if store_to_yaml:
             if isinstance(ret, list):
-                serialize_to_json(ret)
+                serialize_to_yaml(ret)
             else:
-                serialize_to_json([ret])
+                serialize_to_yaml([ret])
 
         # loop through each tag in the list
         if len(tags) == 1:
@@ -330,8 +330,9 @@ def validate_ip(ip):
 
 # This function will read a tag value pair from the PLC at a set interval
 class TagMonitor:
-    def __init__(self, ip, tag):
+    def __init__(self, ip, tag, value):
         self.ip = ip
+        self.value = value
         self.tag = tag
         self.interval = .1
         self.plc = LogixDriver(self.ip)
@@ -347,12 +348,11 @@ class TagMonitor:
         while not self.stop_event.is_set():
             result = self.plc.read(self.tag)
 
-            if result.value == 1 and self.hold == False:
-                print('Tag High')
+            if result.value == self.value and self.hold == False:
                 self.hold = True
-                window.write_event_value('-THREAD-', f'Tag High at Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+                window.write_event_value('-THREAD-', f'Tag = {self.value} at Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
             
-            if result.value == 0:
+            if result.value != self.value:
                 self.hold = False
 
             self.stop_event.wait(self.interval)
@@ -410,13 +410,13 @@ class TagTrender:
                 
                 self.first_pass = False
 
-            window.write_event_value('-THREAD-', f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+            window.write_event_value('-THREAD-', f'\nTimestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
             if self.single_tag:
-                window.write_event_value('-THREAD-', f'\n{result[0].value}')
+                window.write_event_value('-THREAD-', f'{result[0].value}')
                 self.results.append(result[0].value)
             else:
                 for i, r in enumerate(result):            
-                    window.write_event_value('-THREAD-', f'\n{formatted_tag[i]} = {r.value}')
+                    window.write_event_value('-THREAD-', f'{formatted_tag[i]} = {r.value}')
                     self.results[i].append(r.value)
             
             self.timestamps.append((datetime.datetime.now() - start_time).total_seconds() * 1000)
@@ -434,39 +434,38 @@ class TagTrender:
         self.thread = threading.Thread(target=self.read_tag, args=(window,))
         self.thread.start()
 
-sg.theme("DarkBlue")
+sg.theme("DarkGray12")
 
-json_read_tooltip = ' When checked, the read tag results will be stored to a JSON file. A file \n name can be inputted or one will be auto generated if left empty. '
-json_write_tooltip = ' When checked, a JSON file will be written to the PLC. \n A JSON filename must be specified to read from. '
+yaml_read_tooltip = ' When checked, the read tag results will be stored to a YAML file. A file \n name can be inputted or one will be auto generated if left empty. '
+yaml_write_tooltip = ' When checked, a YAML file will be written to the PLC. \n A YAML filename must be specified to read from. '
 value_tooltip = ' When writing a tag, the value must be in the correct format. \n For example, a BOOL must be written as 1 (True) or 0 (False). \n UDTs must be written out in their full expanded names. \n For example: UDT.NestedUDT.TagName                     '
-json_plot_tooltip = ' When checked, a plot of the tag values will \n be displayed after the trend is stopped. '
+yaml_plot_tooltip = ' When checked, a plot of the tag values will \n be displayed after the trend is stopped. '
 
-header = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=15)],
-          [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=40)]])]]
+header = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=20)],
+          [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=50)]])]]
 
-read_tab = [[sg.Frame('JSON', [[sg.CB('Write Results To JSON', tooltip=json_read_tooltip, key='-JSON_READ-', enable_events=True)],
-            [sg.FileBrowse('Browse', file_types=(('JSON Files', '*.json'),), key='-JSON_READ_FILE_BROWSE-', disabled=True), sg.InputText(key='-JSON_READ_FILE-', disabled=True, size=31)]])],
-            [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=40)], [sg.CB('Show Trend Plot', tooltip=json_plot_tooltip, key='-JSON_PLOT-', enable_events=True)]])],
+read_tab = [[sg.Frame('YAML', [[sg.CB('Write Results To YAML', tooltip=yaml_read_tooltip, key='-YAML_READ-', enable_events=True)],
+            [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_READ_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_READ_FILE-', disabled=True, size=40)]])],
+            [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=50)], [sg.CB('Show Trend Plot', tooltip=yaml_plot_tooltip, key='-YAML_PLOT-', enable_events=True)]])],
+            [sg.Frame('Value To Monitor', [[sg.InputText(key='-MONITOR_VALUE-', size=50)]])],
             [sg.Column([[sg.Button('Read'), sg.Button('Start Monitor'), sg.Button('Cancel')]], justification='r')],
-            [sg.Column([[sg.Button('Start Trend'), sg.Button('Show Trend Plot')]], justification='r')]]
+            [sg.Column([[sg.Button('Start Trend'), sg.Button('Show Trend Plot', disabled=True)]], justification='r')]]
 
-write_tab = [[sg.Frame('JSON', [[sg.CB('Write From JSON', tooltip=json_write_tooltip, key='-JSON_WRITE-', enable_events=True)],
-             [sg.FileBrowse('Browse', file_types=(('JSON Files', '*.json'),), key='-JSON_WRITE_FILE_BROWSE-', disabled=True), sg.InputText(key='-JSON_WRITE_FILE-', disabled=True, size=31)]])],
-             [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=40)]])],
+write_tab = [[sg.Frame('YAML', [[sg.CB('Write From YAML', tooltip=yaml_write_tooltip, key='-YAML_WRITE-', enable_events=True)],
+             [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_WRITE_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_WRITE_FILE-', disabled=True, size=40)]])],
+             [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=50)]])],
              [sg.Column([[sg.Button('Write'), sg.Button('Cancel')]], justification='r')]]
 
-footer = [[sg.Frame('Results', [[sg.Multiline(size=(38, 10), reroute_stdout=True)]])]]
+footer = [[sg.Frame('Results', [[sg.Multiline(size=(50, 25), reroute_stdout=True)]])]]
 
 tabs = [[header, sg.TabGroup([[
     sg.Tab('Read', read_tab), sg.Tab('Write', write_tab)]])], footer]
-
+ 
 # Create the Window
-window = sg.Window('PLC Tag Read/Write', tabs, size=(300, 500))
+window = sg.Window('PLC Tag Read/Write', tabs, size=(400, 700), icon='./icon.ico')
 
 trender = None
 monitorer = None
-
-from matplotlib.backend_bases import MouseEvent
 
 class SnappingCursor:
     """
@@ -537,21 +536,21 @@ if __name__ == "__main__":
         elif event == 'Read':
             tag = values['-TAG-']
             ip = values['-IP-']
-            json_read_enabled = values['-JSON_READ-']
-            json_write_enabled = values['-JSON_WRITE-']
-            json_read_file = values['-JSON_READ_FILE-']
-            json_write_file = values['-JSON_WRITE_FILE-']
+            yaml_read_enabled = values['-YAML_READ-']
+            yaml_write_enabled = values['-YAML_WRITE-']
+            yaml_read_file = values['-YAML_READ_FILE-']
+            yaml_write_file = values['-YAML_WRITE_FILE-']
 
             # Convert tag input to a list
             formatted_tag = [t.strip() for t in tag.split(',')]
 
             if ip != '':
                 if validate_ip(ip):
-                    if json_read_enabled:
-                        if json_read_file != '':
-                            data = read_tag(str(ip), formatted_tag, store_to_json=True, json_name=str(json_read_file))
+                    if yaml_read_enabled:
+                        if yaml_read_file != '':
+                            data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file))
                         else:
-                            data = read_tag(str(ip), formatted_tag, store_to_json=True)
+                            data = read_tag(str(ip), formatted_tag, store_to_yaml=True)
                     else:
                         data = read_tag(str(ip), formatted_tag)
 
@@ -575,27 +574,27 @@ if __name__ == "__main__":
             tag = values['-TAG-']
             ip = values['-IP-']
             value = values['-VALUE-']
-            json_read_enabled = values['-JSON_READ-']
-            json_write_enabled = values['-JSON_WRITE-']
-            json_read_file = values['-JSON_READ_FILE-']
-            json_write_file = values['-JSON_WRITE_FILE-']
+            yaml_read_enabled = values['-YAML_READ-']
+            yaml_write_enabled = values['-YAML_WRITE-']
+            yaml_read_file = values['-YAML_READ_FILE-']
+            yaml_write_file = values['-YAML_WRITE_FILE-']
 
             if ip != '':
                 if validate_ip(ip):
 
                     # if not gotten, get the list of tags and their types from the PLC
                     if not tag_list_retrieved:
-                        tag_list = get_tags_from_json(ip)
+                        tag_list = get_tags_from_yaml(ip)
                         tag_list_retrieved = True
 
-                    if json_write_enabled:
-                        results = write_tags_from_json(str(ip), str(json_write_file))
+                    if yaml_write_enabled:
+                        results = write_tags_from_yaml(str(ip), str(yaml_write_file))
                     else:
                         results = write_tag(str(ip), str(tag), str(value))
 
                     if results:
-                        if json_write_enabled:
-                            print(f'{json_write_file} written to {ip} successfully')
+                        if yaml_write_enabled:
+                            print(f'{yaml_write_file} written to {ip} successfully')
                         else:
                             print(f'{value} written to {tag} successfully')
 
@@ -604,12 +603,12 @@ if __name__ == "__main__":
                     print('Please enter a valid IP address')
             else:
                 print('Please enter an IP address')
-        elif event == '-JSON_READ-':
-            window['-JSON_READ_FILE-'].update(disabled=not values['-JSON_READ-'])
-            window['-JSON_READ_FILE_BROWSE-'].update(disabled=not values['-JSON_READ-'])
-        elif event == '-JSON_WRITE-':
-            window['-JSON_WRITE_FILE-'].update(disabled=not values['-JSON_WRITE-'])
-            window['-JSON_WRITE_FILE_BROWSE-'].update(disabled=not values['-JSON_WRITE-'])
+        elif event == '-YAML_READ-':
+            window['-YAML_READ_FILE-'].update(disabled=not values['-YAML_READ-'])
+            window['-YAML_READ_FILE_BROWSE-'].update(disabled=not values['-YAML_READ-'])
+        elif event == '-YAML_WRITE-':
+            window['-YAML_WRITE_FILE-'].update(disabled=not values['-YAML_WRITE-'])
+            window['-YAML_WRITE_FILE_BROWSE-'].update(disabled=not values['-YAML_WRITE-'])
         elif event == 'Show Trend Plot':
             if trender is None:
                 print('No data to display!')
@@ -666,9 +665,11 @@ if __name__ == "__main__":
                 plt.show()
         elif event == 'Start Monitor':
             if monitorer is None:
+                value_to_monitor = set_data_type(values['-MONITOR_VALUE-'], values['-TAG-'])
+
                 try:
                     save_history(values['-IP-'], values['-TAG-'])
-                    monitorer = TagMonitor(values['-IP-'], values['-TAG-'])
+                    monitorer = TagMonitor(values['-IP-'], values['-TAG-'], value_to_monitor)
                     monitorer.run(window)
                     print(f'Monitoring tag {values["-TAG-"]}...')
                     window['Start Monitor'].update('Stop Monitor')
@@ -681,6 +682,9 @@ if __name__ == "__main__":
                 monitorer = None
         elif event == 'Start Trend':
             if trender is None:
+
+                window['Show Trend Plot'].update(disabled=False)
+
                 try:
                     try:
                         float(values['-RATE-'])
@@ -699,11 +703,14 @@ if __name__ == "__main__":
                 except ValueError:
                     print('Please enter a valid IP address')
             else:
+
+                window['Show Trend Plot'].update(disabled=True)
+
                 trender.stop()
                 window['Start Trend'].update('Start Trend')
 
                 # TODO: Make work for multiple tags
-                if values['-JSON_PLOT-']:
+                if values['-YAML_PLOT-']:
 
                     if trender.single_tag:
                         # if multiple results they will be dicts, plot each result in a separate subplot
@@ -759,11 +766,11 @@ if __name__ == "__main__":
                     else:
                         print('\n****** Cannot plot multiple tags yet ******\n')
 
-                if values['-JSON_READ-']:
-                    if values['-JSON_READ_FILE-'] != '':
-                        json_file = values['-JSON_READ_FILE-']
+                if values['-YAML_READ-']:
+                    if values['-YAML_READ_FILE-'] != '':
+                        yaml_file = values['-YAML_READ_FILE-']
                     else:
-                        json_file = f'{values["-TAG-"]}_trend_results.json'
+                        yaml_file = f'{values["-TAG-"]}_trend_results.yaml'
 
                     if type(trender.results[0]) == dict:
                         # get keys from first dict in list
@@ -772,15 +779,15 @@ if __name__ == "__main__":
                     else:
                         keys = ['Trend Duration', 'Value']
 
-                    if values['-JSON_READ-']:
-                        if values['-JSON_READ_FILE-'] != '':
-                            json_file = values['-JSON_READ_FILE-']
+                    if values['-YAML_READ-']:
+                        if values['-YAML_READ_FILE-'] != '':
+                            yaml_file = values['-YAML_READ_FILE-']
                         else:
-                            json_file = f'{values["-TAG-"]}_trend_results.json'
+                            yaml_file = f'{values["-TAG-"]}_trend_results.yaml'
 
-                        with open(json_file, 'w') as f:
+                        with open(yaml_file, 'w') as f:
 
-                            json_data = []
+                            yaml_data = []
 
                             if trender.single_tag:
                                 for i, val in enumerate(trender.results):
@@ -788,9 +795,9 @@ if __name__ == "__main__":
 
                                     td = trender.timestamps[i]
                                     data['Trend Duration'] = td
-                                    data[values['-TAG-']] = val
+                                    data[values['-TAG-'].strip()] = val
 
-                                    json_data.append(data)
+                                    yaml_data.append(data)
                             else:
                                 formatted_tag = [t.strip() for t in values['-TAG-'].split(',')]
 
@@ -803,9 +810,9 @@ if __name__ == "__main__":
                                     for y in range(len(trender.results)):
                                          data[formatted_tag[y]] = trender.results[y][i]
 
-                                    json_data.append(data)                             
+                                    yaml_data.append(data)                             
 
-                            json.dump(json_data, f, indent=4)
+                            yaml.safe_dump(yaml_data, f, default_flow_style=False)
                 trender = None
         elif event == '-THREAD-':
             print(values['-THREAD-'])
