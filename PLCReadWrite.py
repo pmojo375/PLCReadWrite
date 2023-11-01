@@ -549,10 +549,14 @@ header = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=20)],
 
 read_tab = [[sg.Frame('YAML', [[sg.CB('Write Results To YAML', tooltip=yaml_read_tooltip, key='-YAML_READ-', enable_events=True)],
             [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_READ_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_READ_FILE-', disabled=True, size=40)]])],
+            [sg.Column([[RoundedButton('Read', .5, font="Calibri 11"), RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')]]
+
+trend_tab = [[sg.Frame('YAML', [[sg.CB('Write Trend To YAML', tooltip=yaml_read_tooltip, key='-YAML_TREND-', enable_events=True)],
+            [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_TREND_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_TREND_FILE-', disabled=True, size=40)]])],
             [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=50)], [sg.CB('Show Trend Plot', tooltip=yaml_plot_tooltip, key='-YAML_PLOT-', enable_events=True)]])],
             [sg.Frame('Value To Monitor', [[sg.InputText(key='-MONITOR_VALUE-', size=50)]])],
-            [sg.Column([[RoundedButton('Read', .5, font="Calibri 11"), RoundedButton('Start Monitor', .5, font="Calibri 11"), RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')],
-            [sg.Column([[RoundedButton('Start Trend', .5, font="Calibri 11"), RoundedButton('Show Trend Plot', .5, font="Calibri 11", disabled=True)]], justification='r')]]
+            [sg.Column([[RoundedButton('Start Monitor', .5, font="Calibri 11"), RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')],
+            [sg.Column([[RoundedButton('Start Trend', .5, font="Calibri 11"), RoundedButton('Show Trend Plot', .5, font="Calibri 11", metadata=False)]], justification='r')]]
 
 write_tab = [[sg.Frame('YAML', [[sg.CB('Write From YAML', tooltip=yaml_write_tooltip, key='-YAML_WRITE-', enable_events=True)],
              [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_WRITE_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_WRITE_FILE-', disabled=True, size=40)]])],
@@ -562,7 +566,7 @@ write_tab = [[sg.Frame('YAML', [[sg.CB('Write From YAML', tooltip=yaml_write_too
 footer = [[sg.Frame('Results', [[sg.Multiline(size=(50, 25), reroute_stdout=True)]])]]
 
 tabs = [[header, sg.TabGroup([[
-    sg.Tab('Read', read_tab), sg.Tab('Write', write_tab)]])], footer]
+    sg.Tab('Read', read_tab), sg.Tab('Write', write_tab),  sg.Tab('Trend', trend_tab)]])], footer]
  
 # Create the Window
 window = sg.Window('PLC Tag Read/Write', tabs, size=(400, 700), icon='./icon.ico')
@@ -713,7 +717,8 @@ if __name__ == "__main__":
             window['-YAML_WRITE_FILE-'].update(disabled=not values['-YAML_WRITE-'])
             window['-YAML_WRITE_FILE_BROWSE-'].update(disabled=not values['-YAML_WRITE-'])
         elif event == 'Show Trend Plot':
-            if trender is None:
+
+            if trender is None or window['Show Trend Plot'].metadata == False:
                 print('No data to display!')
             else:
                 # if multiple results they will be dicts, plot each result in a separate subplot
@@ -786,7 +791,7 @@ if __name__ == "__main__":
         elif event == 'Start Trend':
             if trender is None:
 
-                window['Show Trend Plot'].update(disabled=False)
+                window['Show Trend Plot'].metadata=True
 
                 try:
                     try:
@@ -807,7 +812,7 @@ if __name__ == "__main__":
                     print('Please enter a valid IP address')
             else:
 
-                window['Show Trend Plot'].update(disabled=True)
+                window['Show Trend Plot'].metadata=False
 
                 trender.stop()
                 window['Start Trend'].update('Start Trend')
@@ -869,9 +874,9 @@ if __name__ == "__main__":
                     else:
                         print('\n****** Cannot plot multiple tags yet ******\n')
 
-                if values['-YAML_READ-']:
-                    if values['-YAML_READ_FILE-'] != '':
-                        yaml_file = values['-YAML_READ_FILE-']
+                if values['-YAML_TREND-']:
+                    if values['-YAML_TREND_FILE-'] != '':
+                        yaml_file = values['-YAML_TREND_FILE-']
                     else:
                         yaml_file = f'{values["-TAG-"]}_trend_results.yaml'
 
@@ -882,9 +887,9 @@ if __name__ == "__main__":
                     else:
                         keys = ['Trend Duration', 'Value']
 
-                    if values['-YAML_READ-']:
-                        if values['-YAML_READ_FILE-'] != '':
-                            yaml_file = values['-YAML_READ_FILE-']
+                    if values['-YAML_TREND-']:
+                        if values['-YAML_TREND_FILE-'] != '':
+                            yaml_file = values['-YAML_TREND_FILE-']
                         else:
                             yaml_file = f'{values["-TAG-"]}_trend_results.yaml'
 
