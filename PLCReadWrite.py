@@ -27,42 +27,8 @@ def RoundedButton(button_text=' ', corner_radius=0, button_type=BUTTON_TYPE_READ
                   mouseover_colors=(None, None), use_ttk_buttons=None, font=None, bind_return_key=False, focus=False, 
                   pad=None, key=None, right_click_menu=None, expand_x=False, expand_y=False, visible=True, 
                   metadata=None):
-    """
-    Creates a PySimpleGUI button with rounded corners.
-
-    :param button_text: (str) Text to display on the button (default is a single space).
-    :param corner_radius: (float) Radius of the button's corners as a fraction of the minimum dimension (default is 0).
-    :param button_type: (str) Type of button (default is BUTTON_TYPE_READ_FORM).
-    :param target: (tuple) Target for the button (default is (None, None)).
-    :param tooltip: (str) Tooltip to display when hovering over the button (default is None).
-    :param file_types: (tuple) Tuple of file types to accept when using the button to select a file (default is FILE_TYPES_ALL_FILES).
-    :param initial_folder: (str) Initial folder to display when using the button to select a file (default is None).
-    :param default_extension: (str) Default extension to use when saving a file (default is '').
-    :param disabled: (bool) Whether the button is initially disabled (default is False).
-    :param change_submits: (bool) Whether the button submits the form when clicked (default is False).
-    :param enable_events: (bool) Whether to enable events for the button (default is False).
-    :param image_size: (tuple) Size of the button's image (default is (None, None)).
-    :param image_subsample: (int) Subsampling factor for the button's image (default is None).
-    :param border_width: (int) Width of the button's border (default is 0).
-    :param size: (tuple) Size of the button (default is (None, None)).
-    :param auto_size_button: (bool) Whether to automatically size the button (default is None).
-    :param button_color: (tuple) Tuple of colors for the button (default is (sg.theme_background_color(), sg.theme_background_color())).
-    :param disabled_button_color: (tuple) Tuple of colors for the button when it is disabled (default is None).
-    :param highlight_colors: (tuple) Tuple of colors for the button when highlighted (default is None).
-    :param mouseover_colors: (tuple) Tuple of colors for the button when the mouse is over it (default is (None, None)).
-    :param use_ttk_buttons: (bool) Whether to use ttk buttons (default is None).
-    :param font: (str) Font to use for the button's text (default is None).
-    :param bind_return_key: (bool) Whether to bind the return key to the button (default is False).
-    :param focus: (bool) Whether to give the button focus (default is False).
-    :param pad: (tuple) Padding for the button (default is None).
-    :param key: (str) Key for the button (default is None).
-    :param right_click_menu: (list) List of menu items for the button's right-click menu (default is None).
-    :param expand_x: (bool) Whether to expand the button horizontally (default is False).
-    :param expand_y: (bool) Whether to expand the button vertically (default is False).
-    :param visible: (bool) Whether the button is initially visible (default is True).
-    :param metadata: (dict) Metadata for the button (default is None).
-    :return: (PySimpleGUI.Button) The rounded button.
-    """
+    #Creates a PySimpleGUI button with rounded corners.
+ 
     # Calculate the size of the button if not provided
     if None in size:
         multi = 5
