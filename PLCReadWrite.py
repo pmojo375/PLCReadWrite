@@ -384,11 +384,12 @@ def validate_ip(ip):
 
 # This function will read a tag value pair from the PLC at a set interval
 class TagMonitor:
-    def __init__(self, ip, tag, value, tags_to_read):
+    def __init__(self, ip, tag, value, **kwargs):
+
         self.ip = ip
         self.value = value
         self.tag = tag
-        self.tags_to_read = tags_to_read
+        self.tags_to_read = kwargs.get('tags_to_read', None)
         self.interval = .1
         self.plc = LogixDriver(self.ip)
         self.plc.open()
@@ -397,6 +398,8 @@ class TagMonitor:
         self.timestamps = []
         self.hold = False
         self.thread = None
+        self.first_event = True
+        self.previous_timestamp = None
 
     def read_tag(self, window):
 
@@ -404,18 +407,30 @@ class TagMonitor:
             result = self.plc.read(self.tag)
 
             if result.value == self.value and self.hold == False:
+
                 self.hold = True
+
                 window.write_event_value('-THREAD-', f'Tag = {self.value} at Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
 
-                data = read_tag(self.ip, self.tags_to_read)
-
-                if type(data) is list:
-                    for item in data:
-                        for key, value in item.items():
-                            print(f'Tag: {key} = {value}')
+                if self.first_event:
+                    self.previous_timestamp = datetime.datetime.now()
+                    self.first_event = False
+                    
                 else:
-                    for key, value in data.items():
-                        print(f'Tag: {key} = {value}')
+                    time_since_last_event = (datetime.datetime.now() - self.previous_timestamp).total_seconds() * 1000
+                    window.write_event_value('-THREAD-', f'Time since last event: {time_since_last_event} ms')
+                    self.previous_timestamp = datetime.datetime.now()
+
+                if self.tags_to_read is not None:
+                    data = read_tag(self.ip, self.tags_to_read)
+
+                    if type(data) is list:
+                        for item in data:
+                            for key, value in item.items():
+                                print(f'Tag: {key} = {value}')
+                    else:
+                        for key, value in data.items():
+                            print(f'Tag: {key} = {value}')
             
             if result.value != self.value:
                 self.hold = False
@@ -670,6 +685,7 @@ if __name__ == "__main__":
             yaml_write_enabled = values['-YAML_WRITE-']
             yaml_read_file = values['-YAML_READ_FILE-']
             yaml_write_file = values['-YAML_WRITE_FILE-']
+            tags_ok = True
 
             if ip != '':
                 if validate_ip(ip):
@@ -767,31 +783,37 @@ if __name__ == "__main__":
         elif event == 'Start Monitor':
             if monitorer is None:
 
+                ip = values['-IP-']
+                tag = values['-TAG-']
+                tags_ok = True
                 
                 if ip != '':
                     if validate_ip(ip):
+                        
+                        # if not gotten, get the list of tags and their types from the PLC
+                        if not tag_list_retrieved:
+                            tag_list = get_tags_from_yaml(ip)
+                            tag_list_retrieved = True
                         
                         if not verify_tag(tag):
                             print(f'{tag} is not a valid tag')
                             tags_ok = False
 
-                        if tags_ok:        
+                        if tags_ok:
 
-                            # if not gotten, get the list of tags and their types from the PLC
-                            if not tag_list_retrieved:
-                                tag_list = get_tags_from_yaml(ip)
-                                tag_list_retrieved = True
-
-                            value_to_monitor = set_data_type(values['-MONITOR_VALUE-'], values['-TAG-'])
+                            value_to_monitor = set_data_type(values['-MONITOR_VALUE-'], tag)
                             tags_to_read = values['-MONITOR_TAGS_TO_READ-']
                             
                             # Convert tag input to a list
                             formatted_tags_to_read = [t.strip() for t in tags_to_read.split(',')]
 
-                            save_history(values['-IP-'], values['-TAG-'])
-                            monitorer = TagMonitor(values['-IP-'], values['-TAG-'], value_to_monitor, formatted_tags_to_read)
+                            save_history(ip, tag)
+                            if tags_to_read is not '':
+                                monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read=formatted_tags_to_read)
+                            else:
+                                monitorer = TagMonitor(ip, tag, value_to_monitor)
                             monitorer.run(window)
-                            print(f'Monitoring tag {values["-TAG-"]}...')
+                            print(f'Monitoring tag {tag}...')
                             window['Start Monitor'].update('Stop Monitor')
                         else:
                             print('Tag not in PLC, please fix and try again')
@@ -807,19 +829,21 @@ if __name__ == "__main__":
         elif event == 'Start Trend':
             if trender is None:
 
+                tags_ok = True
+
                 if ip != '':
                     if validate_ip(ip):
+
+                        # if not gotten, get the list of tags and their types from the PLC
+                        if not tag_list_retrieved:
+                            tag_list = get_tags_from_yaml(ip)
+                            tag_list_retrieved = True
 
                         if not verify_tag(tag):
                             print(f'{tag} is not a valid tag')
                             tags_ok = False
 
                         if tags_ok:  
-
-                            # if not gotten, get the list of tags and their types from the PLC
-                            if not tag_list_retrieved:
-                                tag_list = get_tags_from_yaml(ip)
-                                tag_list_retrieved = True
 
                             window['Show Trend Plot'].metadata=True
 
