@@ -410,7 +410,7 @@ class TagMonitor:
 
                 self.hold = True
 
-                window.write_event_value('-THREAD-', f'Tag = {self.value} at Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+                window.write_event_value('-THREAD-', f'\nTag = {self.value} at Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
 
                 if self.first_event:
                     self.previous_timestamp = datetime.datetime.now()
