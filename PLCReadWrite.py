@@ -351,7 +351,6 @@ def read_tag(ip, tags, **kwargs):
     store_to_yaml = kwargs.get('store_to_yaml', False)
 
     return_data = []
-    tmp = []
     data = {}
 
     yaml_name = kwargs.get('yaml_name', 'tag_values.csv')
@@ -370,12 +369,12 @@ def read_tag(ip, tags, **kwargs):
         if len(tags) == 1:
             entry_tag = tags[0]
             value = ret.value
-            return_data.append(crawl_and_format(value, entry_tag, data))
+            return_data.append(crawl_and_format(value, entry_tag, {}))
         else:
             for i, tag in enumerate(tags):
                 entry_tag = tags[i]
                 value = ret[i].value
-                return_data.append(crawl_and_format(value, entry_tag, data))
+                return_data.append(crawl_and_format(value, entry_tag, {}))
 
     return return_data
 
@@ -399,10 +398,11 @@ def validate_ip(ip):
 
 # This function will read a tag value pair from the PLC at a set interval
 class TagMonitor:
-    def __init__(self, ip, tag, value):
+    def __init__(self, ip, tag, value, tags_to_read):
         self.ip = ip
         self.value = value
         self.tag = tag
+        self.tags_to_read = tags_to_read
         self.interval = .1
         self.plc = LogixDriver(self.ip)
         self.plc.open()
@@ -420,6 +420,16 @@ class TagMonitor:
             if result.value == self.value and self.hold == False:
                 self.hold = True
                 window.write_event_value('-THREAD-', f'Tag = {self.value} at Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+
+                data = read_tag(self.ip, self.tags_to_read)
+
+                if type(data) is list:
+                    for item in data:
+                        for key, value in item.items():
+                            print(f'Tag: {key} = {value}')
+                else:
+                    for key, value in data.items():
+                        print(f'Tag: {key} = {value}')
             
             if result.value != self.value:
                 self.hold = False
@@ -521,6 +531,7 @@ trend_tab = [[sg.Frame('YAML', [[sg.CB('Write Trend To YAML', tooltip=yaml_read_
             [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_TREND_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_TREND_FILE-', disabled=True, size=40)]])],
             [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=50)], [sg.CB('Show Trend Plot', tooltip=yaml_plot_tooltip, key='-YAML_PLOT-', enable_events=True)]])],
             [sg.Frame('Value To Monitor', [[sg.InputText(key='-MONITOR_VALUE-', size=50)]])],
+            [sg.Frame('Tag To Read', [[sg.InputText(key='-MONITOR_TAGS_TO_READ-', size=50)]])],
             [sg.Column([[RoundedButton('Start Monitor', .5, font="Calibri 11"), RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')],
             [sg.Column([[RoundedButton('Start Trend', .5, font="Calibri 11"), RoundedButton('Show Trend Plot', .5, font="Calibri 11", metadata=False)]], justification='r')]]
 
@@ -740,10 +751,15 @@ if __name__ == "__main__":
         elif event == 'Start Monitor':
             if monitorer is None:
                 value_to_monitor = set_data_type(values['-MONITOR_VALUE-'], values['-TAG-'])
+                tags_to_read = values['-MONITOR_TAGS_TO_READ-']
+
+                
+                # Convert tag input to a list
+                formatted_tags_to_read = [t.strip() for t in tags_to_read.split(',')]
 
                 try:
                     save_history(values['-IP-'], values['-TAG-'])
-                    monitorer = TagMonitor(values['-IP-'], values['-TAG-'], value_to_monitor)
+                    monitorer = TagMonitor(values['-IP-'], values['-TAG-'], value_to_monitor, formatted_tags_to_read)
                     monitorer.run(window)
                     print(f'Monitoring tag {values["-TAG-"]}...')
                     window['Start Monitor'].update('Stop Monitor')
