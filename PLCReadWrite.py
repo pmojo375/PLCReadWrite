@@ -178,7 +178,7 @@ def get_tags_from_yaml(ip):
     ret = {}
     
     with LogixDriver(ip) as plc:
-        data = plc.tags_yaml
+        data = plc.tags_json
     
     for tag_name in data.keys():
         tag = data[tag_name]
@@ -288,20 +288,6 @@ def set_data_type(value, tag):
         # If there is an error, print the error message and return None
         print(f"Error in set_data_type: {e}")
         return None
-
-
-# This function will write a CSV file
-def write_csv(csv_name, data):
-    if type(data) == list:
-        with open(csv_name, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=[*data[0]])
-            writer.writeheader()
-            writer.writerows(data)
-    else:
-        with open(csv_name, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=[*data])
-            writer.writeheader()
-            writer.writerow(data)
 
 
 # This function will write a tag value pair to the PLC
@@ -513,6 +499,12 @@ class TagTrender:
         self.thread = threading.Thread(target=self.read_tag, args=(window,))
         self.thread.start()
 
+def verify_tag(tag):
+    if tag in tag_list:
+        return True
+    else:
+        return False
+
 sg.theme("DarkGray12")
 
 yaml_read_tooltip = ' When checked, the read tag results will be stored to a YAML file. A file \n name can be inputted or one will be auto generated if left empty. '
@@ -628,32 +620,48 @@ if __name__ == "__main__":
             # Convert tag input to a list
             formatted_tag = [t.strip() for t in tag.split(',')]
 
+            tags_ok = True
+
             if ip != '':
                 if validate_ip(ip):
-                    if yaml_read_enabled:
-                        if yaml_read_file != '':
-                            data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file))
+
+                    # if not gotten, get the list of tags and their types from the PLC
+                    if not tag_list_retrieved:
+                        tag_list = get_tags_from_yaml(ip)
+                        tag_list_retrieved = True
+
+                    for tag in formatted_tag:
+                        if not verify_tag(tag):
+                            print(f'{tag} is not a valid tag')
+                            tags_ok = False
+
+                    if tags_ok:        
+
+                        if yaml_read_enabled:
+                            if yaml_read_file != '':
+                                data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file))
+                            else:
+                                data = read_tag(str(ip), formatted_tag, store_to_yaml=True)
                         else:
-                            data = read_tag(str(ip), formatted_tag, store_to_yaml=True)
-                    else:
-                        data = read_tag(str(ip), formatted_tag)
+                            data = read_tag(str(ip), formatted_tag)
 
-                    print(f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S %p")}')
-                    
-                    if type(data) is list:
-                        for item in data:
-                            for key, value in item.items():
+                        print(f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S %p")}')
+                        
+                        if type(data) is list:
+                            for item in data:
+                                for key, value in item.items():
+                                    print(f'Tag: {key} = {value}')
+                        else:
+                            for key, value in data.items():
                                 print(f'Tag: {key} = {value}')
-                    else:
-                        for key, value in data.items():
-                            print(f'Tag: {key} = {value}')
 
-                    save_history(ip, tag)
+                        save_history(ip, tag)
+                    else:
+                        print('One or more tags not in PLC, please fix and try again')
                 else:
                     print('Please enter a valid IP address')    
             else:
                 print('Please enter an IP address')
-
         elif event == 'Write':
             tag = values['-TAG-']
             ip = values['-IP-']
@@ -671,18 +679,26 @@ if __name__ == "__main__":
                         tag_list = get_tags_from_yaml(ip)
                         tag_list_retrieved = True
 
-                    if yaml_write_enabled:
-                        results = write_tags_from_yaml(str(ip), str(yaml_write_file))
-                    else:
-                        results = write_tag(str(ip), str(tag), str(value))
+                    if not verify_tag(tag):
+                        print(f'{tag} is not a valid tag')
+                        tags_ok = False
 
-                    if results:
+                    if tags_ok:        
+
                         if yaml_write_enabled:
-                            print(f'{yaml_write_file} written to {ip} successfully')
+                            results = write_tags_from_yaml(str(ip), str(yaml_write_file))
                         else:
-                            print(f'{value} written to {tag} successfully')
+                            results = write_tag(str(ip), str(tag), str(value))
 
-                        save_history(ip, tag)
+                        if results:
+                            if yaml_write_enabled:
+                                print(f'{yaml_write_file} written to {ip} successfully')
+                            else:
+                                print(f'{value} written to {tag} successfully')
+
+                            save_history(ip, tag)
+                    else:
+                        print('Tag not in PLC, please fix and try again')
                 else:
                     print('Please enter a valid IP address')
             else:
@@ -750,21 +766,39 @@ if __name__ == "__main__":
                 plt.show()
         elif event == 'Start Monitor':
             if monitorer is None:
-                value_to_monitor = set_data_type(values['-MONITOR_VALUE-'], values['-TAG-'])
-                tags_to_read = values['-MONITOR_TAGS_TO_READ-']
 
                 
-                # Convert tag input to a list
-                formatted_tags_to_read = [t.strip() for t in tags_to_read.split(',')]
+                if ip != '':
+                    if validate_ip(ip):
+                        
+                        if not verify_tag(tag):
+                            print(f'{tag} is not a valid tag')
+                            tags_ok = False
 
-                try:
-                    save_history(values['-IP-'], values['-TAG-'])
-                    monitorer = TagMonitor(values['-IP-'], values['-TAG-'], value_to_monitor, formatted_tags_to_read)
-                    monitorer.run(window)
-                    print(f'Monitoring tag {values["-TAG-"]}...')
-                    window['Start Monitor'].update('Stop Monitor')
-                except ValueError:
-                    print('Please enter a valid IP address')
+                        if tags_ok:        
+
+                            # if not gotten, get the list of tags and their types from the PLC
+                            if not tag_list_retrieved:
+                                tag_list = get_tags_from_yaml(ip)
+                                tag_list_retrieved = True
+
+                            value_to_monitor = set_data_type(values['-MONITOR_VALUE-'], values['-TAG-'])
+                            tags_to_read = values['-MONITOR_TAGS_TO_READ-']
+                            
+                            # Convert tag input to a list
+                            formatted_tags_to_read = [t.strip() for t in tags_to_read.split(',')]
+
+                            save_history(values['-IP-'], values['-TAG-'])
+                            monitorer = TagMonitor(values['-IP-'], values['-TAG-'], value_to_monitor, formatted_tags_to_read)
+                            monitorer.run(window)
+                            print(f'Monitoring tag {values["-TAG-"]}...')
+                            window['Start Monitor'].update('Stop Monitor')
+                        else:
+                            print('Tag not in PLC, please fix and try again')
+                    else:
+                        print('Please enter a valid IP address')    
+                else:
+                    print('Please enter an IP address')
             else:
                 monitorer.stop()
                 window['Start Monitor'].update('Start Monitor')
@@ -773,25 +807,42 @@ if __name__ == "__main__":
         elif event == 'Start Trend':
             if trender is None:
 
-                window['Show Trend Plot'].metadata=True
+                if ip != '':
+                    if validate_ip(ip):
 
-                try:
-                    try:
-                        float(values['-RATE-'])
-                        ok_rate = True
-                    except ValueError:
-                        ok_rate = False
-                    if ok_rate:
-                        save_history(values['-IP-'], values['-TAG-'])
-                        interval = float(values['-RATE-'])
-                        trender = TagTrender(values['-IP-'], values['-TAG-'], interval)
-                        trender.run(window)
-                        print('Trending...')
-                        window['Start Trend'].update('Stop Trend')
+                        if not verify_tag(tag):
+                            print(f'{tag} is not a valid tag')
+                            tags_ok = False
+
+                        if tags_ok:  
+
+                            # if not gotten, get the list of tags and their types from the PLC
+                            if not tag_list_retrieved:
+                                tag_list = get_tags_from_yaml(ip)
+                                tag_list_retrieved = True
+
+                            window['Show Trend Plot'].metadata=True
+
+                            try:
+                                float(values['-RATE-'])
+                                ok_rate = True
+                            except ValueError:
+                                ok_rate = False
+                            if ok_rate:
+                                save_history(values['-IP-'], values['-TAG-'])
+                                interval = float(values['-RATE-'])
+                                trender = TagTrender(values['-IP-'], values['-TAG-'], interval)
+                                trender.run(window)
+                                print('Trending...')
+                                window['Start Trend'].update('Stop Trend')
+                            else:
+                                print('Invalid trend rate, value must be a number')
+                        else:
+                            print('Tag not in PLC, please fix and try again')
                     else:
-                        print('Invalid trend rate, value must be a number')
-                except ValueError:
-                    print('Please enter a valid IP address')
+                        print('Please enter a valid IP address')    
+                else:
+                    print('Please enter an IP address')
             else:
 
                 window['Show Trend Plot'].metadata=False
