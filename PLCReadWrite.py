@@ -694,11 +694,15 @@ if __name__ == "__main__":
     while True:
         event, values = window.read()
         if connected:
-            if (connection_check_time - datetime.datetime.now()).total_seconds() > 5:
+            #TODO: This doesnt work
+            if (datetime.datetime.now() - connection_check_time).total_seconds() > 5:
+                print('Checking connection...')
                 connection_check_time = datetime.datetime.now()
                 
                 if not check_plc_connection(plc):
                     connected = False
+                    plc.close()
+                    plc = None
                     window['Connect'].update('Connect')
 
         if event == sg.WIN_CLOSED:
@@ -719,17 +723,17 @@ if __name__ == "__main__":
 
             if validate_ip(ip):
                 plc = connect_to_plc(ip)
-            
-            connected = True
+                connected = True
 
-            # if not gotten, get the list of tags and their types from the PLC
-            if not tag_list_retrieved:
-                tag_list = get_tags_from_yaml(ip)
-                tag_list_retrieved = True
+                # if not gotten, get the list of tags and their types from the PLC
+                if not tag_list_retrieved:
+                    tag_list = get_tags_from_yaml(ip)
+                    tag_list_retrieved = True
+                
+                connection_check_time = datetime.datetime.now()
 
-            connection_check_time = datetime.datetime.now()
+                window['Connect'].update('Connected')
             
-            window['Connect'].update('Connected')
         elif event == 'Read':
             tag = values['-TAG-']
             ip = values['-IP-']
