@@ -435,7 +435,7 @@ class TagMonitor:
                     if self.store_to_yaml:
                         yaml_temp['Time Since Last Event'] = time_since_last_event
 
-                if self.tags_to_read_write is not None and self.read_selected:
+                if self.tags_to_read_write != None and self.read_selected:
                     data = read_tag(self.ip, self.tags_to_read_write)
 
                     if type(data) is list:
@@ -449,7 +449,7 @@ class TagMonitor:
                             print(f'Tag: {key} = {value}')
                             if self.store_to_yaml:
                                 yaml_temp[key] = value
-                elif self.tags_to_read_write is not None and self.tags_to_read_write is not None and self.write_selected:
+                elif self.tags_to_read_write != None and self.tags_to_read_write != None and self.write_selected:
                     for i, value in enumerate(self.values_to_write):
                         write_tag(self.ip, self.tags_to_read_write[i], value)
                     
@@ -561,8 +561,7 @@ read_tab = [[sg.Frame('YAML', [[sg.CB('Write Results To YAML', tooltip=yaml_read
 trend_tab = [[sg.Frame('YAML', [[sg.CB('Write Trend To YAML', tooltip=yaml_read_tooltip, key='-YAML_TREND-', enable_events=True)],
             [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_TREND_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_TREND_FILE-', disabled=True, size=40)]])],
             [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=50)], [sg.CB('Show Trend Plot', tooltip=yaml_plot_tooltip, key='-YAML_PLOT-', enable_events=True)]])],
-            [sg.Column([[RoundedButton('Start Trend', .5, font="Calibri 11"), RoundedButton('Show Trend Plot', .5, font="Calibri 11", metadata=False)]], justification='r')],
-            [sg.Column([[RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')]]
+            [sg.Column([[RoundedButton('Start Trend', .5, font="Calibri 11"), RoundedButton('Show Trend Plot', .5, font="Calibri 11", metadata=False)]], justification='r')]]
 
 monitor_tab = [[sg.Frame('YAML', [[sg.CB('Write Monitor To YAML', tooltip=yaml_read_tooltip, key='-YAML_MONITOR-', enable_events=True)],
             [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_MONITOR_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_MONITOR_FILE-', disabled=True, size=40)]])],
@@ -572,12 +571,12 @@ monitor_tab = [[sg.Frame('YAML', [[sg.CB('Write Monitor To YAML', tooltip=yaml_r
             [[sg.Radio("Read", "rw", key='-READ_SELECTED-', default=True), sg.Radio("Write", "rw", key='-WRITE_SELECTED-')],
             [sg.Frame('Tag To Read/Write', [[sg.InputText(key='-MONITOR_TAGS_TO_READ_WRITE-', size=50)]])],
             [sg.Frame('Value To Write', [[sg.InputText(key='-MONITOR_VALUE_TO_WRITE-', size=50)]])]])],
-            [sg.Column([[RoundedButton('Start Monitor', .5, font="Calibri 11"), RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')]]
+            [sg.Column([[RoundedButton('Start Monitor', .5, font="Calibri 11")]], justification='r')]]
 
 write_tab = [[sg.Frame('YAML', [[sg.CB('Write From YAML', tooltip=yaml_write_tooltip, key='-YAML_WRITE-', enable_events=True)],
              [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_WRITE_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_WRITE_FILE-', disabled=True, size=40)]])],
              [sg.Frame('Value', [[sg.InputText(tooltip=value_tooltip, key='-VALUE-', size=50)]])],
-             [sg.Column([[RoundedButton('Write', .5, font="Calibri 11"), RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')]]
+             [sg.Column([[RoundedButton('Write', .5, font="Calibri 11")]], justification='r')]]
 
 footer = [[sg.Frame('Results', [[sg.Multiline(size=(50, 25), reroute_stdout=True)]])]]
 
@@ -650,7 +649,7 @@ if __name__ == "__main__":
     while True:
         event, values = window.read()
 
-        if event == sg.WIN_CLOSED or event == 'Cancel': # if user closes window or clicks cancel
+        if event == sg.WIN_CLOSED:
             if trender is not None:
                 trender.stop()
                 window['Start Trend'].update('Start Trend')
