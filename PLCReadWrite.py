@@ -98,8 +98,8 @@ def RoundedButton(button_text=' ', corner_radius=0, button_type=BUTTON_TYPE_READ
 
 
 # serializes the returned tag or list of tags to yaml format and writes to a file
-def deserialize_from_yaml():
-    with open('tag_values.yaml', 'r') as f:
+def deserialize_from_yaml(yaml_name):
+    with open(yaml_name, 'r') as f:
         yaml_data = yaml.safe_load(f)
         tag_values = []
         for item in yaml_data:
@@ -325,7 +325,7 @@ def write_tags_from_yaml(ip, yaml_name, **kwargs):
 
     plc = kwargs.get('plc', None)
 
-    tags = process_yaml_read(deserialize_from_yaml())
+    tags = process_yaml_read(deserialize_from_yaml(yaml_name))
 
     if plc == None:
         with LogixDriver(ip) as plc:
