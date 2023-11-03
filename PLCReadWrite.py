@@ -652,8 +652,12 @@ if __name__ == "__main__":
         if event == sg.WIN_CLOSED:
             if trender is not None:
                 trender.stop()
+                monitorer.stop()
                 window['Start Trend'].update('Start Trend')
                 trender = None
+            if monitorer is not None:
+                monitorer.stop()
+                monitorer = None
             break
         elif event == 'Read':
             tag = values['-TAG-']
@@ -845,14 +849,14 @@ if __name__ == "__main__":
                             save_history(ip, tag)
 
                             # if reading tags on event
-                            if read_selected and tags_to_read_write is not '':
+                            if read_selected and tags_to_read_write != '':
                                 if values['-YAML_MONITOR-']:
                                     monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, store_to_yaml=True, read_selected=True)
                                 else:
                                     monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, read_selected=True)
 
                             # if writing tags on event
-                            elif write_selected and formatted_values_write is not '' and tags_to_read_write is not '':
+                            elif write_selected and formatted_values_write != '' and tags_to_read_write != '':
                                 converted_values = []
 
                                 for i, value in enumerate(formatted_values_write):
