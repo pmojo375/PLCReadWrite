@@ -390,6 +390,7 @@ class TagMonitor:
         self.value = value
         self.tag = tag
         self.tags_to_read = kwargs.get('tags_to_read', None)
+        self.store_to_yaml = kwargs.get('store_to_yaml', False)
         self.interval = .1
         self.plc = LogixDriver(self.ip)
         self.plc.open()
@@ -400,6 +401,7 @@ class TagMonitor:
         self.thread = None
         self.first_event = True
         self.previous_timestamp = None
+        self.yaml_data = []
 
     def read_tag(self, window):
 
@@ -408,9 +410,16 @@ class TagMonitor:
 
             if result.value == self.value and self.hold == False:
 
+                yaml_temp = {}
+
                 self.hold = True
 
-                window.write_event_value('-THREAD-', f'\nTag = {self.value} at Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+                timestamp = datetime.datetime.now().strftime("%I:%M:%S:%f %p")
+
+                window.write_event_value('-THREAD-', f'\nTag = {self.value} at Timestamp: {timestamp}')
+
+                if self.store_to_yaml:
+                    yaml_temp['Timestamp'] = timestamp
 
                 if self.first_event:
                     self.previous_timestamp = datetime.datetime.now()
@@ -420,6 +429,8 @@ class TagMonitor:
                     time_since_last_event = (datetime.datetime.now() - self.previous_timestamp).total_seconds() * 1000
                     window.write_event_value('-THREAD-', f'Time since last event: {time_since_last_event} ms')
                     self.previous_timestamp = datetime.datetime.now()
+                    if self.store_to_yaml:
+                        yaml_temp['Time Since Last Event'] = time_since_last_event
 
                 if self.tags_to_read is not None:
                     data = read_tag(self.ip, self.tags_to_read)
@@ -427,10 +438,17 @@ class TagMonitor:
                     if type(data) is list:
                         for item in data:
                             for key, value in item.items():
+                                if self.store_to_yaml:
+                                    yaml_temp[key] = value
                                 print(f'Tag: {key} = {value}')
                     else:
                         for key, value in data.items():
                             print(f'Tag: {key} = {value}')
+                            if self.store_to_yaml:
+                                yaml_temp[key] = value
+                    
+                if self.store_to_yaml:
+                    self.yaml_data.append(yaml_temp)
             
             if result.value != self.value:
                 self.hold = False
@@ -809,9 +827,15 @@ if __name__ == "__main__":
 
                             save_history(ip, tag)
                             if tags_to_read is not '':
-                                monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read=formatted_tags_to_read)
+                                if values['-YAML_TREND-']:
+                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read=formatted_tags_to_read, store_to_yaml=True)
+                                else:
+                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read=formatted_tags_to_read)
                             else:
-                                monitorer = TagMonitor(ip, tag, value_to_monitor)
+                                if values['-YAML_TREND-']:
+                                    monitorer = TagMonitor(ip, tag, value_to_monitor, store_to_yaml=True)
+                                else:
+                                    monitorer = TagMonitor(ip, tag, value_to_monitor)
                             monitorer.run(window)
                             print(f'Monitoring tag {tag}...')
                             window['Start Monitor'].update('Stop Monitor')
@@ -822,6 +846,9 @@ if __name__ == "__main__":
                 else:
                     print('Please enter an IP address')
             else:
+                if monitorer.store_to_yaml:
+                    with open('monitor_results.yaml', 'w') as f:
+                        yaml.safe_dump(monitorer.yaml_data, f, default_flow_style=False)
                 monitorer.stop()
                 window['Start Monitor'].update('Start Monitor')
 
