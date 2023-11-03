@@ -389,8 +389,11 @@ class TagMonitor:
         self.ip = ip
         self.value = value
         self.tag = tag
-        self.tags_to_read = kwargs.get('tags_to_read', None)
+        self.tags_to_read_write = kwargs.get('tags_to_read_write', None)
+        self.values_to_write = kwargs.get('values_to_write', None)
         self.store_to_yaml = kwargs.get('store_to_yaml', False)
+        self.read_selected = kwargs.get('read_selected', False)
+        self.write_selected = kwargs.get('write_selected', False)
         self.interval = .1
         self.plc = LogixDriver(self.ip)
         self.plc.open()
@@ -432,8 +435,8 @@ class TagMonitor:
                     if self.store_to_yaml:
                         yaml_temp['Time Since Last Event'] = time_since_last_event
 
-                if self.tags_to_read is not None:
-                    data = read_tag(self.ip, self.tags_to_read)
+                if self.tags_to_read_write is not None and self.read_selected:
+                    data = read_tag(self.ip, self.tags_to_read_write)
 
                     if type(data) is list:
                         for item in data:
@@ -446,6 +449,9 @@ class TagMonitor:
                             print(f'Tag: {key} = {value}')
                             if self.store_to_yaml:
                                 yaml_temp[key] = value
+                elif self.tags_to_read_write is not None and self.tags_to_read_write is not None and self.write_selected:
+                    for i, value in enumerate(self.values_to_write):
+                        write_tag(self.ip, self.tags_to_read_write[i], value)
                     
                 if self.store_to_yaml:
                     self.yaml_data.append(yaml_temp)
@@ -555,10 +561,18 @@ read_tab = [[sg.Frame('YAML', [[sg.CB('Write Results To YAML', tooltip=yaml_read
 trend_tab = [[sg.Frame('YAML', [[sg.CB('Write Trend To YAML', tooltip=yaml_read_tooltip, key='-YAML_TREND-', enable_events=True)],
             [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_TREND_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_TREND_FILE-', disabled=True, size=40)]])],
             [sg.Frame('Trend Rate', [[sg.InputText(key='-RATE-', size=50)], [sg.CB('Show Trend Plot', tooltip=yaml_plot_tooltip, key='-YAML_PLOT-', enable_events=True)]])],
+            [sg.Column([[RoundedButton('Start Trend', .5, font="Calibri 11"), RoundedButton('Show Trend Plot', .5, font="Calibri 11", metadata=False)]], justification='r')],
+            [sg.Column([[RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')]]
+
+monitor_tab = [[sg.Frame('YAML', [[sg.CB('Write Monitor To YAML', tooltip=yaml_read_tooltip, key='-YAML_MONITOR-', enable_events=True)],
+            [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_MONITOR_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_MONITOR_FILE-', disabled=True, size=40)]])],
+            [sg.Frame('Monitor Rate', [[sg.InputText(key='-MONITOR_RATE-', size=50)]])],
             [sg.Frame('Value To Monitor', [[sg.InputText(key='-MONITOR_VALUE-', size=50)]])],
-            [sg.Frame('Tag To Read', [[sg.InputText(key='-MONITOR_TAGS_TO_READ-', size=50)]])],
-            [sg.Column([[RoundedButton('Start Monitor', .5, font="Calibri 11"), RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')],
-            [sg.Column([[RoundedButton('Start Trend', .5, font="Calibri 11"), RoundedButton('Show Trend Plot', .5, font="Calibri 11", metadata=False)]], justification='r')]]
+            [sg.Frame('Read/Write On Monitor', 
+            [[sg.Radio("Read", "rw", key='-READ_SELECTED-', default=True), sg.Radio("Write", "rw", key='-WRITE_SELECTED-')],
+            [sg.Frame('Tag To Read/Write', [[sg.InputText(key='-MONITOR_TAGS_TO_READ_WRITE-', size=50)]])],
+            [sg.Frame('Value To Write', [[sg.InputText(key='-MONITOR_VALUE_TO_WRITE-', size=50)]])]])],
+            [sg.Column([[RoundedButton('Start Monitor', .5, font="Calibri 11"), RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')]]
 
 write_tab = [[sg.Frame('YAML', [[sg.CB('Write From YAML', tooltip=yaml_write_tooltip, key='-YAML_WRITE-', enable_events=True)],
              [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_WRITE_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_WRITE_FILE-', disabled=True, size=40)]])],
@@ -568,10 +582,10 @@ write_tab = [[sg.Frame('YAML', [[sg.CB('Write From YAML', tooltip=yaml_write_too
 footer = [[sg.Frame('Results', [[sg.Multiline(size=(50, 25), reroute_stdout=True)]])]]
 
 tabs = [[header, sg.TabGroup([[
-    sg.Tab('Read', read_tab), sg.Tab('Write', write_tab),  sg.Tab('Trend', trend_tab)]])], footer]
+    sg.Tab('Read', read_tab), sg.Tab('Write', write_tab),  sg.Tab('Trend', trend_tab),  sg.Tab('Monitor', monitor_tab)]])], footer]
  
 # Create the Window
-window = sg.Window('PLC Tag Read/Write', tabs, size=(400, 700), icon='./icon.ico')
+window = sg.Window('PLC Tag Read/Write', tabs, size=(400, 900), icon='./icon.ico')
 
 trender = None
 monitorer = None
@@ -803,6 +817,9 @@ if __name__ == "__main__":
 
                 ip = values['-IP-']
                 tag = values['-TAG-']
+                read_selected = values['-READ_SELECTED-']
+                write_selected = values['-WRITE_SELECTED-']
+                values_to_write = values['-MONITOR_VALUE_TO_WRITE-']
                 tags_ok = True
                 
                 if ip != '':
@@ -820,19 +837,36 @@ if __name__ == "__main__":
                         if tags_ok:
 
                             value_to_monitor = set_data_type(values['-MONITOR_VALUE-'], tag)
-                            tags_to_read = values['-MONITOR_TAGS_TO_READ-']
+                            tags_to_read_write = values['-MONITOR_TAGS_TO_READ_WRITE-']
                             
                             # Convert tag input to a list
-                            formatted_tags_to_read = [t.strip() for t in tags_to_read.split(',')]
+                            formatted_tags_to_read_write = [t.strip() for t in tags_to_read_write.split(',')]
+                            formatted_values_write = [t.strip() for t in values_to_write.split(',')]
 
                             save_history(ip, tag)
-                            if tags_to_read is not '':
-                                if values['-YAML_TREND-']:
-                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read=formatted_tags_to_read, store_to_yaml=True)
+
+                            # if reading tags on event
+                            if read_selected and tags_to_read_write is not '':
+                                if values['-YAML_MONITOR-']:
+                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, store_to_yaml=True, read_selected=True)
                                 else:
-                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read=formatted_tags_to_read)
+                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, read_selected=True)
+
+                            # if writing tags on event
+                            elif write_selected and formatted_values_write is not '' and tags_to_read_write is not '':
+                                converted_values = []
+
+                                for i, value in enumerate(formatted_values_write):
+                                    converted_values.append(set_data_type(value, formatted_tags_to_read_write[i]))
+
+                                if values['-YAML_MONITOR-']:
+                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, store_to_yaml=True, write_selected=True)
+                                else:
+                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, write_selected=True)
+
+                            # if just monitoring tag events
                             else:
-                                if values['-YAML_TREND-']:
+                                if values['-YAML_MONITOR-']:
                                     monitorer = TagMonitor(ip, tag, value_to_monitor, store_to_yaml=True)
                                 else:
                                     monitorer = TagMonitor(ip, tag, value_to_monitor)
@@ -857,6 +891,8 @@ if __name__ == "__main__":
             if trender is None:
 
                 tags_ok = True
+                ip = values['-IP-']
+                tag = values['-TAG-']
 
                 if ip != '':
                     if validate_ip(ip):
@@ -880,9 +916,9 @@ if __name__ == "__main__":
                             except ValueError:
                                 ok_rate = False
                             if ok_rate:
-                                save_history(values['-IP-'], values['-TAG-'])
+                                save_history(ip, tag)
                                 interval = float(values['-RATE-'])
-                                trender = TagTrender(values['-IP-'], values['-TAG-'], interval)
+                                trender = TagTrender(ip, tag, interval)
                                 trender.run(window)
                                 print('Trending...')
                                 window['Start Trend'].update('Stop Trend')
