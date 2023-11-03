@@ -18,6 +18,20 @@ tag_list_retrieved = False
 tag_list = []
 type_list = {}
 
+plc = None
+
+def connect_to_plc(ip):
+    plc = LogixDriver(ip)
+    plc.open()
+    return plc
+
+
+def check_plc_connection(plc):
+    if plc != None:
+        return plc.connected
+    else:
+        return False
+
 
 def RoundedButton(button_text=' ', corner_radius=0, button_type=BUTTON_TYPE_READ_FORM, target=(None, None),
                   tooltip=None, file_types=FILE_TYPES_ALL_FILES, initial_folder=None, default_extension='',
@@ -165,7 +179,7 @@ def process_structure(structure, array, name):
     return array
 
 
-def get_tags_from_yaml(ip):
+def get_tags_from_yaml(ip, **kwargs):
     """
     Gets the data types from the YAML data.
 
@@ -176,10 +190,15 @@ def get_tags_from_yaml(ip):
         list: The list of data types.
     """
     ret = {}
-    
-    with LogixDriver(ip) as plc:
+
+    plc = kwargs.get('plc', None)
+
+    if plc == None:
+        with LogixDriver(ip) as plc:
+            data = plc.tags_json
+    else:
         data = plc.tags_json
-    
+
     for tag_name in data.keys():
         tag = data[tag_name]
         if isinstance(tag['data_type'], str):
@@ -292,16 +311,26 @@ def set_data_type(value, tag):
 
 # This function will write a tag value pair to the PLC
 def write_tag(ip, tag, value, **kwargs):
-    with LogixDriver(ip) as plc:
+    plc = kwargs.get('plc', None)
+
+    if plc == None:
+        with LogixDriver(ip) as plc:
+            return plc.write(tag, set_data_type(value, tag))
+    else:
         return plc.write(tag, set_data_type(value, tag))
 
 
 # Writes tag value pairs read from a CSV file
-def write_tags_from_yaml(ip, yaml_name):
+def write_tags_from_yaml(ip, yaml_name, **kwargs):
 
-    with LogixDriver(ip) as plc:
-        tags = process_yaml_read(deserialize_from_yaml())
+    plc = kwargs.get('plc', None)
 
+    tags = process_yaml_read(deserialize_from_yaml())
+
+    if plc == None:
+        with LogixDriver(ip) as plc:
+            return plc.write(*tags)
+    else:
         return plc.write(*tags)
 
 
@@ -340,28 +369,30 @@ def read_tag(ip, tags, **kwargs):
     data = {}
 
     yaml_name = kwargs.get('yaml_name', 'tag_values.csv')
+    plc = kwargs.get('plc', None)
 
-    with LogixDriver(ip) as plc:
-
+    if plc == None:
+        with LogixDriver(ip) as plc:
+            ret = plc.read(*tags)
+    else:
         ret = plc.read(*tags)
 
-        if store_to_yaml:
-            if isinstance(ret, list):
-                serialize_to_yaml(ret)
-            else:
-                serialize_to_yaml([ret])
-
-        # loop through each tag in the list
-        if len(tags) == 1:
-            entry_tag = tags[0]
-            value = ret.value
-            return_data.append(crawl_and_format(value, entry_tag, {}))
+    if store_to_yaml:
+        if isinstance(ret, list):
+            serialize_to_yaml(ret)
         else:
-            for i, tag in enumerate(tags):
-                entry_tag = tags[i]
-                value = ret[i].value
-                return_data.append(crawl_and_format(value, entry_tag, {}))
+            serialize_to_yaml([ret])
 
+    # loop through each tag in the list
+    if len(tags) == 1:
+        entry_tag = tags[0]
+        value = ret.value
+        return_data.append(crawl_and_format(value, entry_tag, {}))
+    else:
+        for i, tag in enumerate(tags):
+            entry_tag = tags[i]
+            value = ret[i].value
+            return_data.append(crawl_and_format(value, entry_tag, {}))
     return return_data
 
 
@@ -395,8 +426,6 @@ class TagMonitor:
         self.read_selected = kwargs.get('read_selected', False)
         self.write_selected = kwargs.get('write_selected', False)
         self.interval = .1
-        self.plc = LogixDriver(self.ip)
-        self.plc.open()
         self.stop_event = threading.Event()
         self.results = []
         self.timestamps = []
@@ -405,6 +434,14 @@ class TagMonitor:
         self.first_event = True
         self.previous_timestamp = None
         self.yaml_data = []
+
+        plc = kwargs.get('plc', None)
+
+        if plc == None:
+            self.plc = LogixDriver(self.ip)
+            self.plc.open()
+        else:
+            self.plc = plc
 
     def read_tag(self, window):
 
@@ -476,18 +513,24 @@ class TagMonitor:
 
 # This function will read a tag value pair from the PLC at a set interval
 class TagTrender:
-    def __init__(self, ip, tag, interval=1):
+    def __init__(self, ip, tag, interval=1, **kwargs):
         self.ip = ip
         self.tag = tag
         self.interval = interval
-        self.plc = LogixDriver(self.ip)
-        self.plc.open()
         self.stop_event = threading.Event()
         self.results = []
         self.timestamps = []
         self.thread = None
         self.first_pass = True
         self.single_tag = True
+
+        plc = kwargs.get('plc', None)
+
+        if plc == None:
+            self.plc = LogixDriver(self.ip)
+            self.plc.open()
+        else:
+            self.plc = plc
 
     def read_tag(self, window):
         start_time = datetime.datetime.now()
@@ -551,12 +594,12 @@ yaml_write_tooltip = ' When checked, a YAML file will be written to the PLC. \n 
 value_tooltip = ' When writing a tag, the value must be in the correct format. \n For example, a BOOL must be written as 1 (True) or 0 (False). \n UDTs must be written out in their full expanded names. \n For example: UDT.NestedUDT.TagName                     '
 yaml_plot_tooltip = ' When checked, a plot of the tag values will \n be displayed after the trend is stopped. '
 
-header = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=20)],
+header = [[sg.Text('IP Address'), sg.InputText(key='-IP-', size=20), sg.Column([[RoundedButton('Connect', .5, font="Calibri 11")]], justification='r')],
           [sg.Frame('Tag', [[sg.InputText(key='-TAG-', size=50)]])]]
 
 read_tab = [[sg.Frame('YAML', [[sg.CB('Write Results To YAML', tooltip=yaml_read_tooltip, key='-YAML_READ-', enable_events=True)],
             [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_READ_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_READ_FILE-', disabled=True, size=40)]])],
-            [sg.Column([[RoundedButton('Read', .5, font="Calibri 11"), RoundedButton('Cancel', .5, font="Calibri 11")]], justification='r')]]
+            [sg.Column([[RoundedButton('Read', .5, font="Calibri 11")]], justification='r')]]
 
 trend_tab = [[sg.Frame('YAML', [[sg.CB('Write Trend To YAML', tooltip=yaml_read_tooltip, key='-YAML_TREND-', enable_events=True)],
             [sg.FileBrowse('Browse', file_types=(('YAML Files', '*.yaml'),), key='-YAML_TREND_FILE_BROWSE-', disabled=True), sg.InputText(key='-YAML_TREND_FILE-', disabled=True, size=40)]])],
@@ -645,9 +688,18 @@ if __name__ == "__main__":
     except FileNotFoundError:
         pass
 
+    connected = False
+
     # Event Loop to process "events" and get the "values" of the inputs
     while True:
         event, values = window.read()
+        if connected:
+            if (connection_check_time - datetime.datetime.now()).total_seconds() > 5:
+                connection_check_time = datetime.datetime.now()
+                
+                if not check_plc_connection(plc):
+                    connected = False
+                    window['Connect'].update('Connect')
 
         if event == sg.WIN_CLOSED:
             if trender is not None:
@@ -658,7 +710,26 @@ if __name__ == "__main__":
             if monitorer is not None:
                 monitorer.stop()
                 monitorer = None
+            
+            if connected:
+                plc.close()
             break
+        elif event == 'Connect':
+            ip = values['-IP-']
+
+            if validate_ip(ip):
+                plc = connect_to_plc(ip)
+            
+            connected = True
+
+            # if not gotten, get the list of tags and their types from the PLC
+            if not tag_list_retrieved:
+                tag_list = get_tags_from_yaml(ip)
+                tag_list_retrieved = True
+
+            connection_check_time = datetime.datetime.now()
+            
+            window['Connect'].update('Connected')
         elif event == 'Read':
             tag = values['-TAG-']
             ip = values['-IP-']
@@ -689,11 +760,20 @@ if __name__ == "__main__":
 
                         if yaml_read_enabled:
                             if yaml_read_file != '':
-                                data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file))
+                                if connected:
+                                    data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file), plc=plc)
+                                else:
+                                    data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file))
                             else:
-                                data = read_tag(str(ip), formatted_tag, store_to_yaml=True)
+                                if connected:
+                                    data = read_tag(str(ip), formatted_tag, store_to_yaml=True, plc=plc)
+                                else:
+                                    data = read_tag(str(ip), formatted_tag, store_to_yaml=True)
                         else:
-                            data = read_tag(str(ip), formatted_tag)
+                            if connected:
+                                data = read_tag(str(ip), formatted_tag, plc=plc)
+                            else:
+                                data = read_tag(str(ip), formatted_tag)
 
                         print(f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S %p")}')
                         
@@ -737,9 +817,15 @@ if __name__ == "__main__":
                     if tags_ok:        
 
                         if yaml_write_enabled:
-                            results = write_tags_from_yaml(str(ip), str(yaml_write_file))
+                            if connected:
+                                results = write_tags_from_yaml(str(ip), str(yaml_write_file), plc=plc)
+                            else:
+                                results = write_tags_from_yaml(str(ip), str(yaml_write_file))
                         else:
-                            results = write_tag(str(ip), str(tag), str(value))
+                            if connected:
+                                results = write_tag(str(ip), str(tag), str(value), plc=plc)
+                            else:
+                                results = write_tag(str(ip), str(tag), str(value))
 
                         if results:
                             if yaml_write_enabled:
@@ -851,9 +937,15 @@ if __name__ == "__main__":
                             # if reading tags on event
                             if read_selected and tags_to_read_write != '':
                                 if values['-YAML_MONITOR-']:
-                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, store_to_yaml=True, read_selected=True)
+                                    if connected:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, store_to_yaml=True, read_selected=True, plc=plc)
+                                    else:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, store_to_yaml=True, read_selected=True)
                                 else:
-                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, read_selected=True)
+                                    if connected:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, read_selected=True, plc=plc)
+                                    else:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, read_selected=True)
 
                             # if writing tags on event
                             elif write_selected and formatted_values_write != '' and tags_to_read_write != '':
@@ -863,16 +955,28 @@ if __name__ == "__main__":
                                     converted_values.append(set_data_type(value, formatted_tags_to_read_write[i]))
 
                                 if values['-YAML_MONITOR-']:
-                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, store_to_yaml=True, write_selected=True)
+                                    if connected:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, store_to_yaml=True, write_selected=True, plc=plc)
+                                    else:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, store_to_yaml=True, write_selected=True)
                                 else:
-                                    monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, write_selected=True)
+                                    if connected:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, write_selected=True, plc=plc)
+                                    else:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, write_selected=True)
 
                             # if just monitoring tag events
                             else:
                                 if values['-YAML_MONITOR-']:
-                                    monitorer = TagMonitor(ip, tag, value_to_monitor, store_to_yaml=True)
+                                    if connected:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, store_to_yaml=True, plc=plc)
+                                    else:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, store_to_yaml=True)
                                 else:
-                                    monitorer = TagMonitor(ip, tag, value_to_monitor)
+                                    if connected:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor, plc=plc)
+                                    else:
+                                        monitorer = TagMonitor(ip, tag, value_to_monitor)
                             monitorer.run(window)
                             print(f'Monitoring tag {tag}...')
                             window['Start Monitor'].update('Stop Monitor')
@@ -921,7 +1025,11 @@ if __name__ == "__main__":
                             if ok_rate:
                                 save_history(ip, tag)
                                 interval = float(values['-RATE-'])
-                                trender = TagTrender(ip, tag, interval)
+                                
+                                if connected:
+                                    trender = TagTrender(ip, tag, interval, plc=plc)
+                                else:
+                                    trender = TagTrender(ip, tag, interval)
                                 trender.run(window)
                                 print('Trending...')
                                 window['Start Trend'].update('Stop Trend')
