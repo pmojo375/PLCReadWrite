@@ -193,21 +193,25 @@ def get_tags_from_yaml(ip, **kwargs):
 
     plc = kwargs.get('plc', None)
 
-    if plc == None:
-        with LogixDriver(ip) as plc:
+    try:
+        if plc == None:
+            with LogixDriver(ip) as plc:
+                data = plc.tags_json
+        else:
             data = plc.tags_json
-    else:
-        data = plc.tags_json
 
-    for tag_name in data.keys():
-        tag = data[tag_name]
-        if isinstance(tag['data_type'], str):
-            ret[tag_name] = tag['data_type']
-        elif isinstance(tag['data_type'], dict):
-            internal_tags = tag['data_type']['internal_tags']
-            ret = process_structure(internal_tags, ret, tag_name)
+        for tag_name in data.keys():
+            tag = data[tag_name]
+            if isinstance(tag['data_type'], str):
+                ret[tag_name] = tag['data_type']
+            elif isinstance(tag['data_type'], dict):
+                internal_tags = tag['data_type']['internal_tags']
+                ret = process_structure(internal_tags, ret, tag_name)
 
-    return ret
+        return ret
+    except Exception as e:
+        print(f"Error in get_tags_from_yaml: {e}")
+        return None
 
 
 # This function will crawl through a dictionary and format the data
@@ -313,11 +317,15 @@ def set_data_type(value, tag):
 def write_tag(ip, tag, value, **kwargs):
     plc = kwargs.get('plc', None)
 
-    if plc == None:
-        with LogixDriver(ip) as plc:
+    try:
+        if plc == None:
+            with LogixDriver(ip) as plc:
+                return plc.write(tag, set_data_type(value, tag))
+        else:
             return plc.write(tag, set_data_type(value, tag))
-    else:
-        return plc.write(tag, set_data_type(value, tag))
+    except Exception as e:
+        print(f"Error in write_tag: {e}")
+        return None
 
 
 # Writes tag value pairs read from a CSV file
@@ -327,11 +335,15 @@ def write_tags_from_yaml(ip, yaml_name, **kwargs):
 
     tags = process_yaml_read(deserialize_from_yaml(yaml_name))
 
-    if plc == None:
-        with LogixDriver(ip) as plc:
+    try:
+        if plc == None:
+            with LogixDriver(ip) as plc:
+                return plc.write(*tags)
+        else:
             return plc.write(*tags)
-    else:
-        return plc.write(*tags)
+    except Exception as e:
+        print(f"Error in write_tags_from_yaml: {e}")
+        return None
 
 
 # UNUSED
@@ -371,30 +383,33 @@ def read_tag(ip, tags, **kwargs):
     yaml_name = kwargs.get('yaml_name', 'tag_values.csv')
     plc = kwargs.get('plc', None)
 
-    if plc == None:
-        with LogixDriver(ip) as plc:
-            ret = plc.read(*tags)
-    else:
-        ret = plc.read(*tags)
-
-    if store_to_yaml:
-        if isinstance(ret, list):
-            serialize_to_yaml(ret)
+    try:
+        if plc == None:
+            with LogixDriver(ip) as plc:
+                ret = plc.read(*tags)
         else:
-            serialize_to_yaml([ret])
+            ret = plc.read(*tags)
 
-    # loop through each tag in the list
-    if len(tags) == 1:
-        entry_tag = tags[0]
-        value = ret.value
-        return_data.append(crawl_and_format(value, entry_tag, {}))
-    else:
-        for i, tag in enumerate(tags):
-            entry_tag = tags[i]
-            value = ret[i].value
+        if store_to_yaml:
+            if isinstance(ret, list):
+                serialize_to_yaml(ret)
+            else:
+                serialize_to_yaml([ret])
+
+        # loop through each tag in the list
+        if len(tags) == 1:
+            entry_tag = tags[0]
+            value = ret.value
             return_data.append(crawl_and_format(value, entry_tag, {}))
-    return return_data
-
+        else:
+            for i, tag in enumerate(tags):
+                entry_tag = tags[i]
+                value = ret[i].value
+                return_data.append(crawl_and_format(value, entry_tag, {}))
+        return return_data
+    except Exception as e:
+        print(f"Error in read_tag: {e}")
+        return None
 
 # Saves the IP address and tag to a pickled file to read when opening later
 def save_history(ip, tag):
@@ -437,64 +452,71 @@ class TagMonitor:
 
         plc = kwargs.get('plc', None)
 
-        if plc == None:
-            self.plc = LogixDriver(self.ip)
-            self.plc.open()
-        else:
-            self.plc = plc
+        try:
+            if plc == None:
+                self.plc = LogixDriver(self.ip)
+                self.plc.open()
+            else:
+                self.plc = plc
+        except Exception as e:
+            print(f"Error in TagMonitor: {e}")
 
     def read_tag(self, window):
 
         while not self.stop_event.is_set():
-            result = self.plc.read(self.tag)
 
-            if result.value == self.value and self.hold == False:
+            try:
+                result = self.plc.read(self.tag)
 
-                yaml_temp = {}
+                if result.value == self.value and self.hold == False:
 
-                self.hold = True
+                    yaml_temp = {}
 
-                timestamp = datetime.datetime.now().strftime("%I:%M:%S:%f %p")
+                    self.hold = True
 
-                window.write_event_value('-THREAD-', f'\nTag = {self.value} at Timestamp: {timestamp}')
+                    timestamp = datetime.datetime.now().strftime("%I:%M:%S:%f %p")
 
-                if self.store_to_yaml:
-                    yaml_temp['Timestamp'] = timestamp
+                    window.write_event_value('-THREAD-', f'\nTag = {self.value} at Timestamp: {timestamp}')
 
-                if self.first_event:
-                    self.previous_timestamp = datetime.datetime.now()
-                    self.first_event = False
-                    
-                else:
-                    time_since_last_event = (datetime.datetime.now() - self.previous_timestamp).total_seconds() * 1000
-                    window.write_event_value('-THREAD-', f'Time since last event: {time_since_last_event} ms')
-                    self.previous_timestamp = datetime.datetime.now()
                     if self.store_to_yaml:
-                        yaml_temp['Time Since Last Event'] = time_since_last_event
+                        yaml_temp['Timestamp'] = timestamp
 
-                if self.tags_to_read_write != None and self.read_selected:
-                    data = read_tag(self.ip, self.tags_to_read_write)
+                    if self.first_event:
+                        self.previous_timestamp = datetime.datetime.now()
+                        self.first_event = False
+                        
+                    else:
+                        time_since_last_event = (datetime.datetime.now() - self.previous_timestamp).total_seconds() * 1000
+                        window.write_event_value('-THREAD-', f'Time since last event: {time_since_last_event} ms')
+                        self.previous_timestamp = datetime.datetime.now()
+                        if self.store_to_yaml:
+                            yaml_temp['Time Since Last Event'] = time_since_last_event
 
-                    if type(data) is list:
-                        for item in data:
-                            for key, value in item.items():
+                    if self.tags_to_read_write != None and self.read_selected:
+                        data = read_tag(self.ip, self.tags_to_read_write)
+
+                        if type(data) is list:
+                            for item in data:
+                                for key, value in item.items():
+                                    if self.store_to_yaml:
+                                        yaml_temp[key] = value
+                                    print(f'Tag: {key} = {value}')
+                        else:
+                            for key, value in data.items():
+                                print(f'Tag: {key} = {value}')
                                 if self.store_to_yaml:
                                     yaml_temp[key] = value
-                                print(f'Tag: {key} = {value}')
-                    else:
-                        for key, value in data.items():
-                            print(f'Tag: {key} = {value}')
-                            if self.store_to_yaml:
-                                yaml_temp[key] = value
-                elif self.tags_to_read_write != None and self.tags_to_read_write != None and self.write_selected:
-                    for i, value in enumerate(self.values_to_write):
-                        write_tag(self.ip, self.tags_to_read_write[i], value)
-                    
-                if self.store_to_yaml:
-                    self.yaml_data.append(yaml_temp)
-            
-            if result.value != self.value:
-                self.hold = False
+                    elif self.tags_to_read_write != None and self.tags_to_read_write != None and self.write_selected:
+                        for i, value in enumerate(self.values_to_write):
+                            write_tag(self.ip, self.tags_to_read_write[i], value)
+                        
+                    if self.store_to_yaml:
+                        self.yaml_data.append(yaml_temp)
+                
+                if result.value != self.value:
+                    self.hold = False
+            except Exception as e:
+                print(f"Error in read_tag: {e}")
 
             self.stop_event.wait(self.interval)
     
@@ -526,11 +548,14 @@ class TagTrender:
 
         plc = kwargs.get('plc', None)
 
-        if plc == None:
-            self.plc = LogixDriver(self.ip)
-            self.plc.open()
-        else:
-            self.plc = plc
+        try:
+            if plc == None:
+                self.plc = LogixDriver(self.ip)
+                self.plc.open()
+            else:
+                self.plc = plc
+        except Exception as e:
+            print(f"Error in TagTrender: {e}")
 
     def read_tag(self, window):
         start_time = datetime.datetime.now()
@@ -540,34 +565,37 @@ class TagTrender:
             # Convert tag input to a list
             formatted_tag = [t.strip() for t in self.tag.split(',')]
 
-            result = self.plc.read(*formatted_tag)
+            try:
+                result = self.plc.read(*formatted_tag)
 
-            if isinstance(result, list):
-                result = result
-            else:
-                result = [result]
+                if isinstance(result, list):
+                    result = result
+                else:
+                    result = [result]
 
-            if self.first_pass:
-                length = len(result)
-                if length > 1:
-                    self.single_tag = False
+                if self.first_pass:
+                    length = len(result)
+                    if length > 1:
+                        self.single_tag = False
 
-                    for i in range(length):
-                        self.results.append([])
+                        for i in range(length):
+                            self.results.append([])
+                    
+                    self.first_pass = False
+
+                window.write_event_value('-THREAD-', f'\nTimestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+                if self.single_tag:
+                    window.write_event_value('-THREAD-', f'{result[0].value}')
+                    self.results.append(result[0].value)
+                else:
+                    for i, r in enumerate(result):            
+                        window.write_event_value('-THREAD-', f'{formatted_tag[i]} = {r.value}')
+                        self.results[i].append(r.value)
                 
-                self.first_pass = False
-
-            window.write_event_value('-THREAD-', f'\nTimestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
-            if self.single_tag:
-                window.write_event_value('-THREAD-', f'{result[0].value}')
-                self.results.append(result[0].value)
-            else:
-                for i, r in enumerate(result):            
-                    window.write_event_value('-THREAD-', f'{formatted_tag[i]} = {r.value}')
-                    self.results[i].append(r.value)
-            
-            self.timestamps.append((datetime.datetime.now() - start_time).total_seconds() * 1000)
-            self.stop_event.wait(self.interval)
+                self.timestamps.append((datetime.datetime.now() - start_time).total_seconds() * 1000)
+                self.stop_event.wait(self.interval)
+            except Exception as e:
+                print(f"Error in read_tag: {e}")
     
     def stop(self):
         if self.thread is not None:
@@ -717,15 +745,18 @@ if __name__ == "__main__":
             ip = values['-IP-']
 
             if validate_ip(ip):
-                plc = connect_to_plc(ip)
-                connected = True
+                try:
+                    plc = connect_to_plc(ip)
+                    connected = True
 
-                # if not gotten, get the list of tags and their types from the PLC
-                if not tag_list_retrieved:
-                    tag_list = get_tags_from_yaml(ip)
-                    tag_list_retrieved = True
+                    # if not gotten, get the list of tags and their types from the PLC
+                    if not tag_list_retrieved:
+                        tag_list = get_tags_from_yaml(ip)
+                        tag_list_retrieved = True
 
-                window['Connect'].update('Connected')
+                    window['Connect'].update('Connected')
+                except Exception as e:
+                    print(f'Error connecting to PLC: {e}')
             
         elif event == 'Read':
             tag = values['-TAG-']
@@ -746,45 +777,48 @@ if __name__ == "__main__":
                     # if not gotten, get the list of tags and their types from the PLC
                     if not tag_list_retrieved:
                         tag_list = get_tags_from_yaml(ip)
-                        tag_list_retrieved = True
+                        if tag_list != None:
+                            tag_list_retrieved = True
 
-                    for tag in formatted_tag:
-                        if not verify_tag(tag):
-                            print(f'{tag} is not a valid tag')
-                            tags_ok = False
+                    
+                    if tag_list != None:
+                        for tag in formatted_tag:
+                            if not verify_tag(tag):
+                                print(f'{tag} is not a valid tag')
+                                tags_ok = False
 
-                    if tags_ok:        
+                        if tags_ok:        
 
-                        if yaml_read_enabled:
-                            if yaml_read_file != '':
-                                if connected:
-                                    data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file), plc=plc)
+                            if yaml_read_enabled:
+                                if yaml_read_file != '':
+                                    if connected:
+                                        data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file), plc=plc)
+                                    else:
+                                        data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file))
                                 else:
-                                    data = read_tag(str(ip), formatted_tag, store_to_yaml=True, yaml_name=str(yaml_read_file))
+                                    if connected:
+                                        data = read_tag(str(ip), formatted_tag, store_to_yaml=True, plc=plc)
+                                    else:
+                                        data = read_tag(str(ip), formatted_tag, store_to_yaml=True)
                             else:
                                 if connected:
-                                    data = read_tag(str(ip), formatted_tag, store_to_yaml=True, plc=plc)
+                                    data = read_tag(str(ip), formatted_tag, plc=plc)
                                 else:
-                                    data = read_tag(str(ip), formatted_tag, store_to_yaml=True)
-                        else:
-                            if connected:
-                                data = read_tag(str(ip), formatted_tag, plc=plc)
-                            else:
-                                data = read_tag(str(ip), formatted_tag)
+                                    data = read_tag(str(ip), formatted_tag)
 
-                        print(f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S %p")}')
-                        
-                        if type(data) is list:
-                            for item in data:
-                                for key, value in item.items():
+                            print(f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S %p")}')
+                            
+                            if type(data) is list:
+                                for item in data:
+                                    for key, value in item.items():
+                                        print(f'Tag: {key} = {value}')
+                            else:
+                                for key, value in data.items():
                                     print(f'Tag: {key} = {value}')
-                        else:
-                            for key, value in data.items():
-                                print(f'Tag: {key} = {value}')
 
-                        save_history(ip, tag)
-                    else:
-                        print('One or more tags not in PLC, please fix and try again')
+                            save_history(ip, tag)
+                        else:
+                            print('One or more tags not in PLC, please fix and try again')
                 else:
                     print('Please enter a valid IP address')    
             else:
@@ -805,34 +839,36 @@ if __name__ == "__main__":
                     # if not gotten, get the list of tags and their types from the PLC
                     if not tag_list_retrieved:
                         tag_list = get_tags_from_yaml(ip)
-                        tag_list_retrieved = True
+                        if tag_list != None:
+                            tag_list_retrieved = True
 
-                    if not verify_tag(tag):
-                        print(f'{tag} is not a valid tag')
-                        tags_ok = False
+                    if tag_list != None:
+                        if not verify_tag(tag):
+                            print(f'{tag} is not a valid tag')
+                            tags_ok = False
 
-                    if tags_ok:        
+                        if tags_ok:        
 
-                        if yaml_write_enabled:
-                            if connected:
-                                results = write_tags_from_yaml(str(ip), str(yaml_write_file), plc=plc)
-                            else:
-                                results = write_tags_from_yaml(str(ip), str(yaml_write_file))
-                        else:
-                            if connected:
-                                results = write_tag(str(ip), str(tag), str(value), plc=plc)
-                            else:
-                                results = write_tag(str(ip), str(tag), str(value))
-
-                        if results:
                             if yaml_write_enabled:
-                                print(f'{yaml_write_file} written to {ip} successfully')
+                                if connected:
+                                    results = write_tags_from_yaml(str(ip), str(yaml_write_file), plc=plc)
+                                else:
+                                    results = write_tags_from_yaml(str(ip), str(yaml_write_file))
                             else:
-                                print(f'{value} written to {tag} successfully')
+                                if connected:
+                                    results = write_tag(str(ip), str(tag), str(value), plc=plc)
+                                else:
+                                    results = write_tag(str(ip), str(tag), str(value))
 
-                            save_history(ip, tag)
-                    else:
-                        print('Tag not in PLC, please fix and try again')
+                            if results:
+                                if yaml_write_enabled:
+                                    print(f'{yaml_write_file} written to {ip} successfully')
+                                else:
+                                    print(f'{value} written to {tag} successfully')
+
+                                save_history(ip, tag)
+                        else:
+                            print('Tag not in PLC, please fix and try again')
                 else:
                     print('Please enter a valid IP address')
             else:
@@ -914,71 +950,73 @@ if __name__ == "__main__":
                         # if not gotten, get the list of tags and their types from the PLC
                         if not tag_list_retrieved:
                             tag_list = get_tags_from_yaml(ip)
-                            tag_list_retrieved = True
+                            if tag_list != None:
+                                tag_list_retrieved = True
                         
-                        if not verify_tag(tag):
-                            print(f'{tag} is not a valid tag')
-                            tags_ok = False
+                        if tag_list != None:
+                            if not verify_tag(tag):
+                                print(f'{tag} is not a valid tag')
+                                tags_ok = False
 
-                        if tags_ok:
+                            if tags_ok:
 
-                            value_to_monitor = set_data_type(values['-MONITOR_VALUE-'], tag)
-                            tags_to_read_write = values['-MONITOR_TAGS_TO_READ_WRITE-']
-                            
-                            # Convert tag input to a list
-                            formatted_tags_to_read_write = [t.strip() for t in tags_to_read_write.split(',')]
-                            formatted_values_write = [t.strip() for t in values_to_write.split(',')]
+                                value_to_monitor = set_data_type(values['-MONITOR_VALUE-'], tag)
+                                tags_to_read_write = values['-MONITOR_TAGS_TO_READ_WRITE-']
+                                
+                                # Convert tag input to a list
+                                formatted_tags_to_read_write = [t.strip() for t in tags_to_read_write.split(',')]
+                                formatted_values_write = [t.strip() for t in values_to_write.split(',')]
 
-                            save_history(ip, tag)
+                                save_history(ip, tag)
 
-                            # if reading tags on event
-                            if read_selected and tags_to_read_write != '':
-                                if values['-YAML_MONITOR-']:
-                                    if connected:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, store_to_yaml=True, read_selected=True, plc=plc)
+                                # if reading tags on event
+                                if read_selected and tags_to_read_write != '':
+                                    if values['-YAML_MONITOR-']:
+                                        if connected:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, store_to_yaml=True, read_selected=True, plc=plc)
+                                        else:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, store_to_yaml=True, read_selected=True)
                                     else:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, store_to_yaml=True, read_selected=True)
+                                        if connected:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, read_selected=True, plc=plc)
+                                        else:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, read_selected=True)
+
+                                # if writing tags on event
+                                elif write_selected and formatted_values_write != '' and tags_to_read_write != '':
+                                    converted_values = []
+
+                                    for i, value in enumerate(formatted_values_write):
+                                        converted_values.append(set_data_type(value, formatted_tags_to_read_write[i]))
+
+                                    if values['-YAML_MONITOR-']:
+                                        if connected:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, store_to_yaml=True, write_selected=True, plc=plc)
+                                        else:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, store_to_yaml=True, write_selected=True)
+                                    else:
+                                        if connected:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, write_selected=True, plc=plc)
+                                        else:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, write_selected=True)
+
+                                # if just monitoring tag events
                                 else:
-                                    if connected:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, read_selected=True, plc=plc)
+                                    if values['-YAML_MONITOR-']:
+                                        if connected:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, store_to_yaml=True, plc=plc)
+                                        else:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, store_to_yaml=True)
                                     else:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, read_selected=True)
-
-                            # if writing tags on event
-                            elif write_selected and formatted_values_write != '' and tags_to_read_write != '':
-                                converted_values = []
-
-                                for i, value in enumerate(formatted_values_write):
-                                    converted_values.append(set_data_type(value, formatted_tags_to_read_write[i]))
-
-                                if values['-YAML_MONITOR-']:
-                                    if connected:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, store_to_yaml=True, write_selected=True, plc=plc)
-                                    else:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, store_to_yaml=True, write_selected=True)
-                                else:
-                                    if connected:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, write_selected=True, plc=plc)
-                                    else:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, tags_to_read_write=formatted_tags_to_read_write, values_to_write=converted_values, write_selected=True)
-
-                            # if just monitoring tag events
+                                        if connected:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor, plc=plc)
+                                        else:
+                                            monitorer = TagMonitor(ip, tag, value_to_monitor)
+                                monitorer.run(window)
+                                print(f'Monitoring tag {tag}...')
+                                window['Start Monitor'].update('Stop Monitor')
                             else:
-                                if values['-YAML_MONITOR-']:
-                                    if connected:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, store_to_yaml=True, plc=plc)
-                                    else:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, store_to_yaml=True)
-                                else:
-                                    if connected:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor, plc=plc)
-                                    else:
-                                        monitorer = TagMonitor(ip, tag, value_to_monitor)
-                            monitorer.run(window)
-                            print(f'Monitoring tag {tag}...')
-                            window['Start Monitor'].update('Stop Monitor')
-                        else:
-                            print('Tag not in PLC, please fix and try again')
+                                print('Tag not in PLC, please fix and try again')
                     else:
                         print('Please enter a valid IP address')    
                 else:
@@ -1004,36 +1042,38 @@ if __name__ == "__main__":
                         # if not gotten, get the list of tags and their types from the PLC
                         if not tag_list_retrieved:
                             tag_list = get_tags_from_yaml(ip)
-                            tag_list_retrieved = True
+                            if tag_list != None:
+                                tag_list_retrieved = True
 
-                        if not verify_tag(tag):
-                            print(f'{tag} is not a valid tag')
-                            tags_ok = False
+                        if tag_list != None:
+                            if not verify_tag(tag):
+                                print(f'{tag} is not a valid tag')
+                                tags_ok = False
 
-                        if tags_ok:  
+                            if tags_ok:  
 
-                            window['Show Trend Plot'].metadata=True
+                                window['Show Trend Plot'].metadata=True
 
-                            try:
-                                float(values['-RATE-'])
-                                ok_rate = True
-                            except ValueError:
-                                ok_rate = False
-                            if ok_rate:
-                                save_history(ip, tag)
-                                interval = float(values['-RATE-'])
-                                
-                                if connected:
-                                    trender = TagTrender(ip, tag, interval, plc=plc)
+                                try:
+                                    float(values['-RATE-'])
+                                    ok_rate = True
+                                except ValueError:
+                                    ok_rate = False
+                                if ok_rate:
+                                    save_history(ip, tag)
+                                    interval = float(values['-RATE-'])
+                                    
+                                    if connected:
+                                        trender = TagTrender(ip, tag, interval, plc=plc)
+                                    else:
+                                        trender = TagTrender(ip, tag, interval)
+                                    trender.run(window)
+                                    print('Trending...')
+                                    window['Start Trend'].update('Stop Trend')
                                 else:
-                                    trender = TagTrender(ip, tag, interval)
-                                trender.run(window)
-                                print('Trending...')
-                                window['Start Trend'].update('Stop Trend')
+                                    print('Invalid trend rate, value must be a number')
                             else:
-                                print('Invalid trend rate, value must be a number')
-                        else:
-                            print('Tag not in PLC, please fix and try again')
+                                print('Tag not in PLC, please fix and try again')
                     else:
                         print('Please enter a valid IP address')    
                 else:
