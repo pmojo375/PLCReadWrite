@@ -692,18 +692,13 @@ if __name__ == "__main__":
 
     # Event Loop to process "events" and get the "values" of the inputs
     while True:
-        event, values = window.read()
+        event, values = window.read(timeout=5000)
         if connected:
-            #TODO: This doesnt work
-            if (datetime.datetime.now() - connection_check_time).total_seconds() > 5:
-                print('Checking connection...')
-                connection_check_time = datetime.datetime.now()
-                
-                if not check_plc_connection(plc):
-                    connected = False
-                    plc.close()
-                    plc = None
-                    window['Connect'].update('Connect')
+            if not check_plc_connection(plc):
+                connected = False
+                plc.close()
+                plc = None
+                window['Connect'].update('Connect')
 
         if event == sg.WIN_CLOSED:
             if trender is not None:
@@ -729,8 +724,6 @@ if __name__ == "__main__":
                 if not tag_list_retrieved:
                     tag_list = get_tags_from_yaml(ip)
                     tag_list_retrieved = True
-                
-                connection_check_time = datetime.datetime.now()
 
                 window['Connect'].update('Connected')
             
