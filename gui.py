@@ -65,6 +65,7 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout()
         entry_layout = QVBoxLayout()
         results_layout = QVBoxLayout()
+        ip_layout = QHBoxLayout()
 
         # Create tab widget
         tabs = QTabWidget()
@@ -188,7 +189,10 @@ class MainWindow(QMainWindow):
         self.yaml_file_browser.clicked.connect(lambda: self.yaml_file.setText(QFileDialog.getOpenFileName()[0]))
 
         # Add to main layout
-        entry_layout.addWidget(self.ip_input)
+        ip_layout.addWidget(self.ip_input)
+        self.connect_button = QPushButton("Connect")
+        ip_layout.addWidget(self.connect_button)
+        entry_layout.addLayout(ip_layout)
         entry_layout.addWidget(self.tag_input)
         entry_layout.addWidget(self.yaml_enabled)
         entry_layout.addLayout(yaml_file_layout)
