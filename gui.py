@@ -574,20 +574,114 @@ class Trender(QObject):
         self.running = False
         self.finished.emit()
 
-def monitor_button_clicked(monitor_button, tag_input, ip_input, yaml_enabled, yaml_file, monitor_rate, monitor_value, enable_event, read_selected_radio, write_selected_radio, results):
-    if monitor_button.text() == "Monitor":
-        monitor_button.setText("Stop Monitoring")
-    else:
-        monitor_button.setText("Monitor")
+class Monitorer(QObject):
+    update = Signal(str)
+    update_trend_data = Signal(list, list)
+    finished = Signal()
 
-    results.appendPlainText(f"Monitor button clicked with tag {tag_input.text()}, ip {ip_input.text()}, and rate {monitor_rate.value()}")
-    results.appendPlainText(f"Yaml enabled: {yaml_enabled.isChecked()} with file: {yaml_file.text()}")
-    results.appendPlainText(f"Enable event: {enable_event.isChecked()} with value {monitor_value.text()}")
+    def __init__(self):
+        super(Monitorer, self).__init__()
+        self.tags_to_read_write = None
+        self.values_to_write = None
+        self.read_selected = False
+        self.write_selected = False
+        self.hold = False
+        self.first_event = True
+        self.previous_timestamp = None
+        self.yaml_data = []
+        self.running = False
+        self.ip = None
+        self.value = None
+        self.tag = None
+        self.interval = 1
+        self.results = []
+        self.timestamps = []
+        self.first_pass = True
+        self.single_tag = True
+        self.plc = None
+        self.read_write_tag_list = None
 
-    if read_selected_radio.isChecked():
-        results.appendPlainText("Read selected")
-    elif write_selected_radio.isChecked():
-        results.appendPlainText("Write selected")
+    def run(self):
+        start_time = datetime.datetime.now()
+
+        self.results = []
+        self.timestamps = []
+
+        if self.tags_to_read_write != None:
+            self.read_write_tag_list = [t.strip() for t in self.tags_to_read_write.split(',')]
+            
+        try:
+            if plc == None:
+                self.plc = LogixDriver(self.ip)
+                self.plc.open()
+            else:
+                self.plc = plc
+        except Exception as e:
+            print(f"Error in Monitorer: {e}")
+
+        self.update.emit('Starting Monitor...')
+
+        while self.running:
+
+            try:
+                result = self.plc.read(self.tag)
+
+                if result.value == self.value and self.hold == False:
+
+                    yaml_temp = {}
+                    self.hold = True
+                    timestamp = datetime.datetime.now().strftime("%I:%M:%S:%f %p")
+                    now = datetime.datetime.now()
+
+                    self.update.emit(f'\nTag = {self.value} at Timestamp: {timestamp}')
+
+                    yaml_temp['Timestamp'] = timestamp
+
+                    if self.first_event:
+                        self.previous_timestamp = now
+                        self.first_event = False
+                    else:
+                        time_since_last_event = (now - self.previous_timestamp).total_seconds() * 1000
+                        self.update.emit(f'Time since last event: {time_since_last_event} ms')
+                        self.previous_timestamp = now
+
+                        yaml_temp['Time Since Last Event'] = time_since_last_event
+
+                    if self.read_write_tag_list != None and self.read_selected:
+                        read_event_results = plc.read(*self.read_write_tag_list)
+
+                        # if there were muliple tags in the read event
+                        if type(read_event_results) is list:
+                            for i, tag_result in enumerate(read_event_results):
+                                yaml_temp[self.read_write_tag_list[i]] = tag_result.value
+                                self.update.emit(f'{self.read_write_tag_list[i]} = {tag_result.value}')
+                        else:
+                            yaml_temp[self.read_write_tag_list[0]] = read_event_results.value
+                            self.update.emit(f'{self.read_write_tag_list[0]} = {read_event_results.value}')
+
+                    elif self.read_write_tag_list != None and self.write_selected:
+
+                        tag_write_data = []
+
+                        for i, value in enumerate([t.strip() for t in self.values_to_write.split(',')]):
+                            tag_write_data.append((self.read_write_tag_list[i], set_data_type(value, self.tags_to_read_write[i])))
+                            
+                        plc.write(*tag_write_data)
+                        self.update.emit(f'Successfully wrote to tags: {self.tags_to_read_write}')
+                        
+                    self.yaml_data.append(yaml_temp)
+                
+                if result.value != self.value:
+                    self.hold = False
+                    
+            except Exception as e:
+                print(f"Error in monitorer: {e}")
+            
+            QThread.msleep(self.interval)
+    
+    def stop(self):
+        self.running = False
+        self.finished.emit()
 
 
 class MainWindow(QMainWindow):
@@ -597,19 +691,24 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("PLC Read/Write")
 
         self.trender = Trender()
-        self.thread = QThread()
-        self.trender.moveToThread(self.thread)
-        self.thread.started.connect(self.trender.run)
+        self.monitorer = Monitorer()
+        self.trend_thread = QThread()
+        self.monitor_thread = QThread()
+        self.trender.moveToThread(self.trend_thread)
+        self.trend_thread.started.connect(self.trender.run)
         self.trender.update.connect(self.print_resuts)
         #self.trender.finished.connect(self.trender.deleteLater)
         #self.thread.finished.connect(self.thread.deleteLater)
-        self.trender.finished.connect(self.thread.quit)
+        self.trender.finished.connect(self.trend_thread.quit)
 
+        self.monitorer.moveToThread(self.monitor_thread)
+        self.monitor_thread.started.connect(self.monitorer.run)
+        self.monitorer.finished.connect(self.monitor_thread.quit)
+        self.monitorer.update.connect(self.print_resuts)
         self.trender_results = []
         self.trender_timestamps = []
 
         self.trender.update_trend_data.connect(self.update_trend_data)
-
 
         # Create layouts
         main_layout = QHBoxLayout()
@@ -678,12 +777,16 @@ class MainWindow(QMainWindow):
 
         # Create write tab widgets
         monitor_tab = QWidget()
-        self.monitor_button = QPushButton("Monitor")
+        self.monitor_button = QPushButton("Start Monitor")
         self.monitor_value = QLineEdit()
         self.monitor_rate = QDoubleSpinBox()
         self.enable_event = QCheckBox("Enable Read/Write On Event")
         self.read_selected_radio  = QRadioButton("Read On Event")
         self.write_selected_radio  = QRadioButton("Write On Event")
+        self.monitor_read_write_tags = QLineEdit()
+        self.monitor_read_write_tags.setPlaceholderText("Tags to Read/Write On Event")
+        self.monitor_read_write_values = QLineEdit()
+        self.monitor_read_write_values.setPlaceholderText("Values to Write On Event")
 
         self.monitor_rate.setRange(0.1, 60)
         self.monitor_rate.setValue(1)
@@ -705,6 +808,8 @@ class MainWindow(QMainWindow):
         monitor_tab_layout.addWidget(self.enable_event)
         monitor_tab_layout.addLayout(self.monitor_radio_layout)
         monitor_tab_layout.addWidget(self.monitor_button)
+        monitor_tab_layout.addWidget(self.monitor_read_write_tags)
+        monitor_tab_layout.addWidget(self.monitor_read_write_values)
 
         monitor_tab.setLayout(monitor_tab_layout)
 
@@ -794,6 +899,7 @@ class MainWindow(QMainWindow):
         self.trend_button.clicked.connect(self.trender_thread)
         self.trend_plot_button.clicked.connect(lambda: plot_trend_data(self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
 
+        self.monitor_button.clicked.connect(self.monitorer_thread)
         # Load stored data if available
         try:
             f = open('plc_readwrite.pckl', 'rb')
@@ -817,14 +923,33 @@ class MainWindow(QMainWindow):
             self.trender.stop()
             self.trend_button.setText("Start Trend")
         else:
-            if not self.thread.isRunning():
+            if not self.trend_thread.isRunning():
                 self.trender.ip = self.ip_input.text()
                 self.trender.tags = self.tag_input.text()
                 self.trender.interval = (self.trend_rate.value() * 1000)
                 self.trender.plc = plc
                 self.trender.running = True
-                self.thread.start()
+                self.trend_thread.start()
                 self.trend_button.setText("Stop Trend")
+
+    def monitorer_thread(self):
+        if self.monitorer.running:
+            self.monitorer.stop()
+            self.monitor_button.setText("Start Monitor")
+        else:
+            if not self.monitor_thread.isRunning():
+                self.monitorer.ip = self.ip_input.text()
+                self.monitorer.tags_to_read_write = self.monitor_read_write_tags.text()
+                self.monitorer.values_to_write = self.monitor_read_write_values.text()
+                self.monitorer.read_selected = self.read_selected_radio.isChecked()
+                self.monitorer.write_selected = self.write_selected_radio.isChecked()
+                self.monitorer.tag = self.tag_input.text()
+                self.monitorer.value = set_data_type(self.monitor_value.text(), self.tag_input.text())
+                self.monitorer.interval = (self.monitor_rate.value() * 1000)
+                self.monitorer.plc = plc
+                self.monitorer.running = True
+                self.monitor_thread.start()
+                self.monitor_button.setText("Stop Monitor")
 
 app = QApplication(sys.argv)
 qdarktheme.setup_theme()
