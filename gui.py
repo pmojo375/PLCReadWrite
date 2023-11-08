@@ -22,6 +22,7 @@ import pickle
 import re
 import datetime
 import threading
+import matplotlib.pyplot as plt
 
 tag_types = None
 plc = None
@@ -427,6 +428,76 @@ def validate_ip(ip):
         return False
 
 
+def plot_trend_data(tag, results, timestamps, single_tag):
+
+    if single_tag:
+        # ensure tag is an elementary data type
+        if type(results[0]) != dict:
+            fig, ax = plt.subplots(facecolor=(.18, .31, .31))
+            plot, = ax.plot(timestamps, results, 'wo', markersize=2)
+            ax.set_xlabel('Time (msec)', color='w')
+            ax.set_ylabel('Value', color='w')
+            ax.set_title(f'{tag} Trend Results', color='w')
+            ax.tick_params(labelcolor='w', labelsize='medium', width=3)
+            ax.set_facecolor('k')
+            ax.grid()
+
+            min_val = min(results)
+            max_val = max(results)
+
+            range_val = max_val - min_val
+
+            spacing_val = range_val/30
+
+            ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
+
+            plt.show()
+        else:
+            print('\n****** Can only plot elementary data types ******\n')
+    else:
+        print('\n****** Cannot plot multiple tags yet ******\n')
+
+def process_trend_data(tag, results, timestamps, single_tag, yaml_enabled, yaml_file):
+    if yaml_enabled:
+        if yaml_file == '':
+            yaml_file = f'{tag}_trend_results.yaml'
+
+        if type(results[0]) == dict:
+            # get keys from first dict in list
+            keys = ['Trend Duration']
+            keys = keys + [key for key in trender.results[0].keys()]
+        else:
+            keys = ['Trend Duration', 'Value']
+
+        with open(yaml_file, 'w') as f:
+
+            yaml_data = []
+
+            if single_tag:
+                for i, val in enumerate(results):
+                    data = {}
+
+                    td = timestamps[i]
+                    data['Trend Duration'] = td
+                    data[tag.strip()] = val
+
+                    yaml_data.append(data)
+            else:
+                formatted_tag = [t.strip() for t in tag.split(',')]
+
+                # loop through the length of the trend results
+                for i in range(len(results[0])):
+                    data = {}
+                    td = timestamps[i]
+                    data['Trend Duration'] = td
+
+                    for y in range(len(results)):
+                            data[formatted_tag[y]] = results[y][i]
+
+                    yaml_data.append(data)                             
+
+            yaml.safe_dump(yaml_data, f, default_flow_style=False)
+
 class Trender(QObject):
     update = Signal(str)
     update_trend_data = Signal(list, list)
@@ -601,8 +672,6 @@ class MainWindow(QMainWindow):
         trend_tab_layout.addWidget(self.trend_button)
         trend_tab_layout.addWidget(self.trend_plot_button)
 
-        self.trend_plot_button.clicked.connect(self.show_graph)
-
         trend_tab.setLayout(trend_tab_layout)
 
         tabs.addTab(trend_tab, "Trend")
@@ -702,7 +771,6 @@ class MainWindow(QMainWindow):
             )
         )
         
-
         # Connect write button to write_tag function
         self.write_button.clicked.connect(
             lambda: write_tag(
@@ -724,6 +792,7 @@ class MainWindow(QMainWindow):
         )
 
         self.trend_button.clicked.connect(self.trender_thread)
+        self.trend_plot_button.clicked.connect(lambda: plot_trend_data(self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
 
         # Load stored data if available
         try:
@@ -734,11 +803,6 @@ class MainWindow(QMainWindow):
             self.tag_input.setText(str(data_stored[1]))
         except FileNotFoundError:
             pass
-    
-    def show_graph(self):
-        self.results.appendPlainText('Graph Popup!')
-        print(self.trender_results)
-        print(self.trender_timestamps)
 
     def print_resuts(self, results):
         self.results.appendPlainText(results)
@@ -749,6 +813,7 @@ class MainWindow(QMainWindow):
 
     def trender_thread(self):
         if self.trender.running:
+            process_trend_data(self.trender.tags, self.trender.results, self.trender.timestamps, self.trender.single_tag, self.yaml_enabled.isChecked(), self.yaml_file.text())
             self.trender.stop()
             self.trend_button.setText("Start Trend")
         else:
