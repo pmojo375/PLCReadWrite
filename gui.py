@@ -429,6 +429,7 @@ def validate_ip(ip):
 
 class Trender(QObject):
     update = Signal(str)
+    update_trend_data = Signal(list, list)
     finished = Signal()
 
     def __init__(self):
@@ -445,6 +446,10 @@ class Trender(QObject):
 
     def run(self):
         start_time = datetime.datetime.now()
+
+        self.results = []
+        self.timestamps = []
+
         # Convert tag input to a list
         formatted_tags = [t.strip() for t in self.tags.split(',')]
 
@@ -456,6 +461,8 @@ class Trender(QObject):
                 self.plc = plc
         except Exception as e:
             print(f"Error in Trender: {e}")
+
+        self.update.emit('Starting Trend...')
 
         while self.running:
 
@@ -485,19 +492,16 @@ class Trender(QObject):
                         self.results[i].append(r.value)
                 
                 self.timestamps.append((datetime.datetime.now() - start_time).total_seconds() * 1000)
+
+                self.update_trend_data.emit(self.results, self.timestamps)
             except Exception as e:
                 print(f"Error in Trender: {e}")
             
-            QThread.sleep(self.interval)
+            QThread.msleep(self.interval)
     
     def stop(self):
         self.running = False
         self.finished.emit()
-
-
-def show_trend_plot(tag_input, ip_input, yaml_enabled, yaml_file, trend_rate, results):
-    results.appendPlainText(f"Show trend plot button clicked with tag {tag_input.text()}, ip {ip_input.text()}, and rate {trend_rate.value()}")
-    results.appendPlainText(f"Yaml enabled: {yaml_enabled.isChecked()} with file: {yaml_file.text()}")
 
 def monitor_button_clicked(monitor_button, tag_input, ip_input, yaml_enabled, yaml_file, monitor_rate, monitor_value, enable_event, read_selected_radio, write_selected_radio, results):
     if monitor_button.text() == "Monitor":
@@ -529,6 +533,12 @@ class MainWindow(QMainWindow):
         #self.trender.finished.connect(self.trender.deleteLater)
         #self.thread.finished.connect(self.thread.deleteLater)
         self.trender.finished.connect(self.thread.quit)
+
+        self.trender_results = []
+        self.trender_timestamps = []
+
+        self.trender.update_trend_data.connect(self.update_trend_data)
+
 
         # Create layouts
         main_layout = QHBoxLayout()
@@ -591,7 +601,7 @@ class MainWindow(QMainWindow):
         trend_tab_layout.addWidget(self.trend_button)
         trend_tab_layout.addWidget(self.trend_plot_button)
 
-        self.trend_plot_button.clicked.connect(lambda: show_trend_plot(self.tag_input, self.ip_input, self.yaml_enabled, self.yaml_file, self.trend_rate, self.results))
+        self.trend_plot_button.clicked.connect(self.show_graph)
 
         trend_tab.setLayout(trend_tab_layout)
 
@@ -724,9 +734,18 @@ class MainWindow(QMainWindow):
             self.tag_input.setText(str(data_stored[1]))
         except FileNotFoundError:
             pass
+    
+    def show_graph(self):
+        self.results.appendPlainText('Graph Popup!')
+        print(self.trender_results)
+        print(self.trender_timestamps)
 
     def print_resuts(self, results):
         self.results.appendPlainText(results)
+
+    def update_trend_data(self, results, timestamps):
+        self.trender_results = results
+        self.trender_timestamps = timestamps
 
     def trender_thread(self):
         if self.trender.running:
@@ -736,7 +755,7 @@ class MainWindow(QMainWindow):
             if not self.thread.isRunning():
                 self.trender.ip = self.ip_input.text()
                 self.trender.tags = self.tag_input.text()
-                self.trender.interval = self.trend_rate.value()
+                self.trender.interval = (self.trend_rate.value() * 1000)
                 self.trender.plc = plc
                 self.trender.running = True
                 self.thread.start()
