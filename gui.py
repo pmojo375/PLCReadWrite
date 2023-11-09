@@ -17,11 +17,13 @@ from PySide2.QtWidgets import (
     QWidget,
     QPlainTextEdit,
 )
+from PySide2 import QtGui
 import yaml
 import pickle
 import re
 import datetime
 import matplotlib.pyplot as plt
+import csv
 
 tag_types = None
 plc = None
@@ -577,6 +579,33 @@ def process_trend_data(tag, results, timestamps, single_tag, yaml_enabled, yaml_
 
             yaml.safe_dump(yaml_data, f, default_flow_style=False)
 
+
+def flatten_dict(d, parent_key='', sep='.'):
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        elif isinstance(v, list):
+            for i, item in enumerate(v):
+                items.append((f"{new_key}[{i}]", item))
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+def yaml_to_csv(yaml_file, csv_file):
+    with open(yaml_file, 'r') as jf:
+        data = yaml.safe_load(jf)
+
+    flattened_data = [flatten_dict(item) for item in data]
+
+    with open(csv_file, 'w', newline='') as cf:
+        writer = csv.DictWriter(cf, fieldnames=['tag', 'value'])
+        writer.writeheader()
+        for item in flattened_data:
+            for tag, value in item.items():
+                writer.writerow({'tag': tag, 'value': value})
+
 class Trender(QObject):
     """
     A class to read and update PLC tags and emit signals for GUI updates.
@@ -973,6 +1002,7 @@ class MainWindow(QMainWindow):
         self.yaml_file_browser = QPushButton("Browse")
         self.connect_button = QPushButton("Connect")
         self.results = QPlainTextEdit()
+        self.yaml_to_csv_button = QPushButton("Convert YAML File to CSV")
 
         # Set parameters
         self.tag_input.setPlaceholderText("Tag")
@@ -989,6 +1019,7 @@ class MainWindow(QMainWindow):
         entry_layout.addWidget(self.tag_input)
         entry_layout.addWidget(self.yaml_enabled)
         entry_layout.addLayout(yaml_file_layout)
+        entry_layout.addWidget(self.yaml_to_csv_button)
         entry_layout.addWidget(tabs)
         results_layout.addWidget(self.results)
 
@@ -1048,6 +1079,15 @@ class MainWindow(QMainWindow):
         self.monitor_button.clicked.connect(self.monitorer_thread)
         self.connect_button.clicked.connect(lambda: connect_to_plc(self.ip_input.text(), self.connect_button, self))
         self.yaml_file_browser.clicked.connect(lambda: self.yaml_file.setText(QFileDialog.getOpenFileName()[0]))
+        self.yaml_to_csv_button.clicked.connect(
+            lambda: yaml_to_csv(
+                self.yaml_file.text(),
+                'tag_values.csv'
+            ) if self.yaml_file.text() != '' else yaml_to_csv(
+                'tag_values.yaml',
+                'tag_values.csv'
+            )
+        )
 
         # Load stored data if available
         try:
@@ -1110,6 +1150,7 @@ class MainWindow(QMainWindow):
 
 
 app = QApplication(sys.argv)
+app.setWindowIcon(QtGui.QIcon('icon.ico'))
 qdarktheme.setup_theme()
 window = MainWindow()
 window.show()
