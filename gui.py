@@ -16,6 +16,12 @@ from PySide2.QtWidgets import (
     QRadioButton,
     QWidget,
     QPlainTextEdit,
+    QMenuBar,
+    QLabel,
+    QAction,
+    QToolBar,
+    QAction,
+    QStatusBar
 )
 from PySide2 import QtGui
 import yaml
@@ -850,13 +856,53 @@ class Monitorer(QObject):
         self.running = False
         self.finished.emit()
 
+class AboutWindow(QWidget):
+    """
+    This "window" is a QWidget. If it has no parent, it
+    will appear as a free-floating window as we want.
+    """
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("About")
+        layout = QVBoxLayout()
+        self.name_label = QLabel("PLC Tag Utility")
+        self.version_label = QLabel("Version 1.0")
+        self.author_label = QLabel("Created by: Parker Mojsiejenko")
+        self.description_label = QLabel("This project is a utility for reading and writing tags from Allen-Bradley PLCs. It can read and write from YAML files as well a convert the read file to CSV if desired. In addition to that it can trend tags and monitor tags for changes and write to them when they change.")
+        self.description_label.setWordWrap(True)
+        self.about_label = QLabel("This project relies on the pycomm3 library made by ottowayi for communicating with Allen-Bradley PLCs.")
+        self.name_label.setAlignment(Qt.AlignCenter)
+        self.version_label.setAlignment(Qt.AlignCenter)
+        self.author_label.setAlignment(Qt.AlignCenter)
+        self.about_label.setAlignment(Qt.AlignCenter)
+        self.description_label.setAlignment(Qt.AlignCenter)
+        self.name_label.setFont(QtGui.QFont("Arial", 20))
+        layout.addWidget(self.name_label)
+        layout.addWidget(self.version_label)
+        layout.addWidget(self.author_label)
+        layout.addWidget(self.about_label)
+        layout.addWidget(self.description_label)
+        self.setLayout(layout)
+
 
 class MainWindow(QMainWindow):
+    def show_about_window(self):
+        if self.w is None:
+            self.w = AboutWindow()
+        self.w.show()
 
     def __init__(self):
         super(MainWindow, self).__init__()
 
+        self.w = None
         self.setWindowTitle("PLC Read/Write")
+
+        menubar = self.menuBar()
+        menubar.addAction("About")
+        menubar.show()
+
+        # open AboutWindow when About is clicked
+        menubar.triggered.connect(self.show_about_window)
 
         # Create timer for checking PLC connection
         self.plc_connection_check_timer = QTimer()
