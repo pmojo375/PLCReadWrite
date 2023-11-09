@@ -1,7 +1,7 @@
 import sys
 from pycomm3 import LogixDriver
 import qdarktheme
-from PySide2.QtCore import Qt, QThread, Signal, QObject
+from PySide2.QtCore import Qt, QThread, Signal, QObject, QTimer
 from PySide2.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -21,14 +21,12 @@ import yaml
 import pickle
 import re
 import datetime
-import threading
 import matplotlib.pyplot as plt
 
 tag_types = None
 plc = None
-trender = None
 
-def connect_to_plc(ip, connect_button):
+def connect_to_plc(ip, connect_button, main_window):
     """
     Connects to a PLC using the given IP address and updates the connect_button text accordingly.
 
@@ -46,6 +44,7 @@ def connect_to_plc(ip, connect_button):
         plc.close()
         connect_button.setText("Connect")
         plc = None
+        main_window.stop_plc_connection_check()
     else:
         plc_instance = LogixDriver(ip)
         plc_instance.open()
@@ -56,6 +55,23 @@ def connect_to_plc(ip, connect_button):
             connect_button.setText("Disconnect")
 
         plc = plc_instance
+
+        main_window.start_plc_connection_check()
+
+
+def check_plc_connection(plc, main_window):
+    if plc != None:
+        if plc.connected:
+            try:
+                plc.get_plc_name()
+                return True
+            except:
+                main_window.stop_plc_connection_check()
+                return False
+
+    main_window.stop_plc_connection_check()
+    return False
+                
 
 
 def serialize_to_yaml(data, **kwargs):
@@ -690,6 +706,9 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
         self.setWindowTitle("PLC Read/Write")
 
+        self.plc_connection_check_timer = QTimer()
+        self.plc_connection_check_timer.timeout.connect(lambda: check_plc_connection(plc, self))
+
         self.trender = Trender()
         self.monitorer = Monitorer()
         self.trend_thread = QThread()
@@ -846,7 +865,7 @@ class MainWindow(QMainWindow):
         self.results.setReadOnly(True)
         results_layout.addWidget(self.results)
 
-        self.connect_button.clicked.connect(lambda: connect_to_plc(self.ip_input.text(), self.connect_button))
+        self.connect_button.clicked.connect(lambda: connect_to_plc(self.ip_input.text(), self.connect_button, self))
 
         main_layout.addLayout(entry_layout)
 
@@ -950,6 +969,15 @@ class MainWindow(QMainWindow):
                 self.monitorer.running = True
                 self.monitor_thread.start()
                 self.monitor_button.setText("Stop Monitor")
+    
+    def start_plc_connection_check(self):
+        self.plc_connection_check_timer.start(5000)
+
+    def stop_plc_connection_check(self):
+        self.plc_connection_check_timer.stop()
+        self.results.appendPlainText('PLC Connection Lost')
+        self.connect_button.setText("Connect")
+
 
 app = QApplication(sys.argv)
 qdarktheme.setup_theme()
