@@ -1,53 +1,43 @@
-This program is a GUI that allows you to read and write to an Allen Bradley PLC. It has the ability to read tags and write the results to a YAML file and write tags from data in a YAML file as well.
+PLC TAG UTILITY
 
-Additional work will be done to add and improve the features as time goes on.
+PLC Tag Utility is designed to read, write, trend and monitor tags in Allen Bradley PLCs. It has a intuitive GUI and can interface with PLCs with very little latancy. It also has the ability to store the data read into a YAML file (basically a fancy CSV file that shows nested structures better than a CSV can) and can take tag/value pairs from a YAML file and write them too. The trend feature will read tags and display and, if enabled, store the data to a YAML file, at a given rate. The monitor feature reads the PLC and when a tag equals an inputted value, it logs the time and can read or write other tags using that event as a trigger. This too can be stored to a YAML file.
+
+INTERFACE
+
+The GUI uses a tabbed layout for the 4 features (read, write, trend and monitor) and has a common area to input the IP address and tag that will be read, written, trended or monitored. The right side of the window is where the results will be displayed. To faciliate faster communication, it is recommened to connect to the PLC with the connect button but it will still work without connecting first as the program will create a new connection for the function and close it afterwards when complete. If you do use the connect button, before closing the window, hit the same button which should now say disconnect to open up the connection. If you forget to, nothing bad will happen and it will eventually timeout on its own but if you do this too much you may have to wait to connect next time you use the utility.
+
+TAG FORMATTING
+
+When entering a tag into the tag input box, it is important to format the tag in the proper way.
+
+For tags that are arrays you can specify the number of members in the array to be read and what member to start at. The number of members to read should be enclosed in curly brackets at the end of the tag (My_Array{x}), the member to start at is enclosed in square brackets (My_Array[x]) and combined they will indicate which member to start at and how many to read. If either are omitted in a tag that is an array, they defualt to start at the first member and read only 1 member so My_Array would default to My_Array[0]{1}.
+
+If the tag is not an array there is nothing needed and you may simply input the tag name.
+
+You also have the ability to enter more than one tag if you wish but you must seperate them by commas.
+
+If you want to read a UDT you do not have to format the tag in any special way but if you only want to read one of the child tags in a UDT you can enter that just like you would use it in your logic and use dot notation (My_UDT.ChildTag).
+
+VALUE FORMATTING WHEN WRITING
+
+When writting tags, you will enter the tag or tags you wish to write to and then in the value input box you enter the values seperating them by commas if there are multiple tags to write to.
+
+You can write to UDTs but must format the value in a specific way. It is recommended to read the UDT and have it save to a YAML file to manipulate and then write from that file as it is much simpler that way but if you insist on not going that direction you will have to format the value as python dictionaries. Python dictionaries are key/value pairs where the value can be another dictionary if there are nested UDTs in your parent UDT.
+
+For example, if you have a UDT with 2 DINTs and a BOOL, your value you would enter would be {'Dint1': x, 'Dint2': x, 'Bool': True} and if that UDT was nested in another UDT with a DINT you would enter {'AntherDint': x, 'NestedUDT': {'Dint1': x, 'Dint2': x, 'Bool': True}}.
+
+YAML
+
+To store results to a YAML file or read a YAML file to write values, you need to check the box on the interface. Entering a file name is optional when storing results as it will default to tag_values.yaml but if you have values you have already read, it will overwrite them so use caution when omitting the file name.
+
+When writing values from a YAML file, you can also leave the file name blank but it will default to writing from the tag_values.yaml file name. If that file doesnt exist it will fail.
+
+When trending a tag with the YAML option enabled, the timestamp will be written along with the value read at the rate you set when starting the trend and when monitoring a tag with the option enabled, the duration since the monitoring was started or the last time the tag monitored was equal to the value you inputed will be written. If you have the option to read tags when the a monitor event occurs, the values of those tags will be stored to the file as well.
+
+SPECIAL THANKS
 
 This script relies heavily on the work of ottowayi's pycomm3 library to do all the communcations to and from the PLC.
-I only implemented additional features and wrapped the pycomm3 functions in my own.
+
+This is only a GUI that wraps the functions in that library to my own functions so without it, this project would not be possible.
 
 Take a look at their work here: https://github.com/ottowayi/pycomm3
-
-When the GUI opens up you will have a few areas to input information:
-  - IP Address: Enter the PLC IP address here.
-  - Enable YAML Read/Write: Check this box to enable YAML functionality. When reading from the PLC while enabled, your results will output to a YAML file. When writing to the PLC, tags and values will be read from a YAML file and each tag will have its value written to it.
-  - Browse: Click this to browse for your YAML file. When one is selected, its path will be written to the text box to the right of this button. You may also type a path driectly to the text box. Paths can be relative. For example, if running the script in a folder that also contains a tags.yaml file, you may just type "tags.yaml" in the text box.
-  - Tag: When YAML read/write is disabled and you are writing to the PLC, this is the tag that will be written to. When reading, this will be the tag that you read reguardless of whether you have CSV read/write enabled or not.
-  - Value: When you have YAML read/write disabled and you are writing to the PLC, this is the value you are writing. When reading this has no use and may be left empty reguardless if YAML read/write is on or not.
-  - Results: This is where your results will be printed. It will tell you if there are any issues as well with the read/write or if any information was not entered or entered incorrectly.
-  - Read: If everything is inputted correctly, this will read a tag from the PLC.
-  - Write: If everthing is inputted correctly, this will write a tag/value pair to the PLC or read tag/value pairs from a CSV to write.
-  - Cancel: Closes the window.
-  - NEED TO UPDATE TO INCLUDE NEW FEATURES
-
-INSTALLATION
-
-- Install Python
-  - Latest version is best
-- Navigate to Directory
-  - Using any terminal (powershell, cmd, etc.) navigate to the project folder this document is in
-  - Can be done by using "CD" (without quotes) followed by the path
-  - "./" (without quotes) indicates your current directory
-  - Example: "CD ./Desktop/PLC/PLCReadWrite"
-- Create Virtual Environment
-  - While withing the project folder, create your virtual environment with the following command (without quotes):
-    - "python -m venv ./venv"
-- Activate Virtual Enviroment
-  - If you are in the same folder still fun the following command (without quotes):
-    - "./venv/scripts/activate.ps1"
-  - If all went well you will see (venv) on the left of your prompt
-  - When you are done you can deactivate the virtual enviroment by running the command deactivate
-- Install Libraries
-  - In the directory, run the following (without quotes):
-    - "python -m pip install -r requirements.txt" (NEED TO UPDATE THIS FILE)
-  - The libraries may take a minute to install
-- Run Script
-  - From the project directory, run the following command (without quotes):
-    - python -m ./PLCReadWrite.py
-  - You will then get a prompt to enter your IP address. After typing it out, press enter.
-  - Then you will get a prompt to enter the tag you want to read.
-    - Single tags can be entered as you would assume. If you want to read a specific array member add [x] to the end
-    - If you want to read a whole array of size x, after the tag name type {x} where x is the number of elements to read
-    - Press enter to run the script.
-  - Data will be in a YAML file called "part_history.yaml"
-- Repeat the last step as needed. The installing python step, virtual environment and installing libraries steps only need to be done on the first run
-  - You will need to activate the venv though everytime unless it is still activated.
