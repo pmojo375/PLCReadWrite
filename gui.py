@@ -60,6 +60,16 @@ def connect_to_plc(ip, connect_button, main_window):
 
 
 def check_plc_connection(plc, main_window):
+    """
+    Check if the PLC is connected and return True if it is, False otherwise.
+
+    Args:
+        plc (PLC): The PLC object to check connection for.
+        main_window (MainWindow): The main window object.
+
+    Returns:
+        bool: True if the PLC is connected, False otherwise.
+    """
     if plc != None:
         if plc.connected:
             try:
@@ -72,7 +82,6 @@ def check_plc_connection(plc, main_window):
     main_window.stop_plc_connection_check()
     return False
                 
-
 
 def serialize_to_yaml(data, **kwargs):
     """
@@ -104,8 +113,17 @@ def serialize_to_yaml(data, **kwargs):
 
         yaml.safe_dump(yaml_data, f, default_flow_style=False)
 
-# serializes the returned tag or list of tags to yaml format and writes to a file
+
 def deserialize_from_yaml(yaml_name):
+    """
+    Deserialize data from a YAML file and return a list of dictionaries containing tag-value pairs.
+    
+    Args:
+    - yaml_name (str): The name of the YAML file to deserialize.
+    
+    Returns:
+    - tag_values (list of dict): A list of dictionaries containing tag-value pairs.
+    """
     with open(yaml_name, 'r') as f:
         yaml_data = yaml.safe_load(f)
         tag_values = []
@@ -117,6 +135,17 @@ def deserialize_from_yaml(yaml_name):
 
 
 def iterate_value(name, value, ret):
+    """
+    Recursively iterates through a nested dictionary or list and returns a list of tuples containing the name and value of each leaf node.
+
+    Args:
+        name (str): The name of the current node.
+        value (dict or list): The value of the current node.
+        ret (list): The list to append the name-value tuples to.
+
+    Returns:
+        list: A list of tuples containing the name and value of each leaf node.
+    """
     if type(value) == list:
         for i, value in enumerate(value):
             iterate_value(f'{name}[{i}]', value, ret)
@@ -130,6 +159,15 @@ def iterate_value(name, value, ret):
 
 
 def process_yaml_read(data):
+    """
+    Processes YAML data and returns a list of processed data.
+
+    Args:
+        data (list): A list of YAML tags, where each tag is a dictionary with 'tag' and 'value' keys.
+
+    Returns:
+        list: A list of processed data.
+    """
 
     processed_data = []
 
@@ -226,6 +264,7 @@ def read_tag(ip, tags, result_window, **kwargs):
                 result_window.appendPlainText(f"{key} = {value}")
     except Exception as e:
         print(f"Error in read_tag: {e}")
+
 
 def get_tags_from_yaml(ip, **kwargs):
     """
@@ -421,6 +460,16 @@ def write_tag(ip, tags, values, results, **kwargs):
 
 
 def save_history(ip, tag):
+    """
+    Saves the IP address and tag to a file named 'plc_readwrite.pckl' using pickle.
+
+    Args:
+        ip (str): The IP address to be saved.
+        tag (str): The tag to be saved.
+
+    Returns:
+        None
+    """
     if ip != '' and tag != '':
         f = open('plc_readwrite.pckl', 'wb')
         pickle.dump((ip, tag), f)
@@ -474,6 +523,20 @@ def plot_trend_data(tag, results, timestamps, single_tag):
         print('\n****** Cannot plot multiple tags yet ******\n')
 
 def process_trend_data(tag, results, timestamps, single_tag, yaml_enabled, yaml_file):
+    """
+    Process trend data and write it to a YAML file if enabled.
+
+    Args:
+        tag (str): The tag name.
+        results (list): The list of trend results.
+        timestamps (list): The list of timestamps.
+        single_tag (bool): Whether the tag is a single tag or a list of tags.
+        yaml_enabled (bool): Whether to write the trend data to a YAML file.
+        yaml_file (str): The YAML file to write the trend data to.
+
+    Returns:
+        None
+    """
     if yaml_enabled:
         if yaml_file == '':
             yaml_file = f'{tag}_trend_results.yaml'
@@ -515,6 +578,26 @@ def process_trend_data(tag, results, timestamps, single_tag, yaml_enabled, yaml_
             yaml.safe_dump(yaml_data, f, default_flow_style=False)
 
 class Trender(QObject):
+    """
+    A class to read and update PLC tags and emit signals for GUI updates.
+
+    Attributes:
+    -----------
+    update : Signal
+        A signal to update the GUI with a message.
+    update_trend_data : Signal
+        A signal to update the GUI with the trend data.
+    finished : Signal
+        A signal to indicate that the thread has finished.
+
+    Methods:
+    --------
+    run()
+        A method to start the thread and read PLC tags.
+    stop()
+        A method to stop the thread.
+    """
+
     update = Signal(str)
     update_trend_data = Signal(list, list)
     finished = Signal()
@@ -532,6 +615,9 @@ class Trender(QObject):
         self.plc = None
 
     def run(self):
+        """
+        A method to start the thread and read PLC tags.
+        """
         start_time = datetime.datetime.now()
 
         self.results = []
@@ -587,15 +673,47 @@ class Trender(QObject):
             QThread.msleep(self.interval)
     
     def stop(self):
+        """
+        A method to stop the thread.
+        """
         self.running = False
         self.finished.emit()
 
 class Monitorer(QObject):
+    """
+    A class for monitoring PLC tags and writing to them.
+
+    Attributes:
+    - update (Signal): a signal for updating the GUI with messages
+    - update_trend_data (Signal): a signal for updating the GUI with trend data
+    - finished (Signal): a signal for indicating that the monitoring has finished
+    - tags_to_read_write (str): a comma-separated string of tags to read or write to
+    - values_to_write (str): a comma-separated string of values to write to the tags
+    - read_selected (bool): a flag indicating whether read is selected
+    - write_selected (bool): a flag indicating whether write is selected
+    - hold (bool): a flag indicating whether the tag value is being held
+    - first_event (bool): a flag indicating whether this is the first event
+    - previous_timestamp (datetime): the timestamp of the previous event
+    - yaml_data (list): a list of YAML data
+    - running (bool): a flag indicating whether the monitoring is running
+    - ip (str): the IP address of the PLC
+    - value (str): the value of the tag being monitored
+    - tag (str): the name of the tag being monitored
+    - interval (int): the interval between reads in milliseconds
+    - first_pass (bool): a flag indicating whether this is the first pass
+    - single_tag (bool): a flag indicating whether only one tag is being monitored
+    - plc (LogixDriver): a driver for communicating with the PLC
+    - read_write_tag_list (list): a list of tags to read or write to
+    """
+
     update = Signal(str)
     update_trend_data = Signal(list, list)
     finished = Signal()
 
     def __init__(self):
+        """
+        Initializes a new Monitorer object.
+        """
         super(Monitorer, self).__init__()
         self.tags_to_read_write = None
         self.values_to_write = None
@@ -610,18 +728,19 @@ class Monitorer(QObject):
         self.value = None
         self.tag = None
         self.interval = 1
-        self.results = []
-        self.timestamps = []
         self.first_pass = True
         self.single_tag = True
         self.plc = None
         self.read_write_tag_list = None
 
     def run(self):
-        start_time = datetime.datetime.now()
+        """
+        Runs the monitoring process.
+        """
 
-        self.results = []
-        self.timestamps = []
+        self.first_event = True
+        self.hold == False
+        self.yaml_data = []
 
         if self.tags_to_read_write != None:
             self.read_write_tag_list = [t.strip() for t in self.tags_to_read_write.split(',')]
@@ -696,6 +815,9 @@ class Monitorer(QObject):
             QThread.msleep(self.interval)
     
     def stop(self):
+        """
+        Stops the monitoring process.
+        """
         self.running = False
         self.finished.emit()
 
@@ -704,98 +826,110 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super(MainWindow, self).__init__()
+
         self.setWindowTitle("PLC Read/Write")
 
+        # Create timer for checking PLC connection
         self.plc_connection_check_timer = QTimer()
         self.plc_connection_check_timer.timeout.connect(lambda: check_plc_connection(plc, self))
 
+        # Trender thread and signals
         self.trender = Trender()
-        self.monitorer = Monitorer()
         self.trend_thread = QThread()
-        self.monitor_thread = QThread()
         self.trender.moveToThread(self.trend_thread)
         self.trend_thread.started.connect(self.trender.run)
         self.trender.update.connect(self.print_resuts)
-        #self.trender.finished.connect(self.trender.deleteLater)
-        #self.thread.finished.connect(self.thread.deleteLater)
         self.trender.finished.connect(self.trend_thread.quit)
+        self.trender.update_trend_data.connect(self.update_trend_data)
+        self.trender_results = []
+        self.trender_timestamps = []
 
+        # Monitorer thread and signals
+        self.monitorer = Monitorer()
+        self.monitor_thread = QThread()
         self.monitorer.moveToThread(self.monitor_thread)
         self.monitor_thread.started.connect(self.monitorer.run)
         self.monitorer.finished.connect(self.monitor_thread.quit)
         self.monitorer.update.connect(self.print_resuts)
-        self.trender_results = []
-        self.trender_timestamps = []
-
-        self.trender.update_trend_data.connect(self.update_trend_data)
 
         # Create layouts
         main_layout = QHBoxLayout()
         entry_layout = QVBoxLayout()
         results_layout = QVBoxLayout()
         ip_layout = QHBoxLayout()
+        read_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
+        write_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
+        trend_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
+        monitor_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
+        self.monitor_radio_layout = QHBoxLayout()
+        yaml_file_layout = QHBoxLayout()
 
         # Create tab widget
         tabs = QTabWidget()
+        self.read_tab = QWidget()
+        write_tab = QWidget()
+        trend_tab = QWidget()
+        monitor_tab = QWidget()
         tabs.setTabPosition(QTabWidget.North)
 
-        # Create read tab widgets
-        self.read_tab = QWidget()
-        self.read_button = QPushButton("Read")
+        # --------------------------------------------#
+        #                   READ TAB                  #
+        # --------------------------------------------#
 
-        # Read tab layouts
-        read_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
+        # Create widgets
+        self.read_button = QPushButton("Read")
 
         # Add to layouts
         read_tab_layout.addWidget(self.read_button)
 
-        self.read_tab.setLayout(read_tab_layout)
         
-        tabs.addTab(self.read_tab, "Read")
+        # --------------------------------------------#
+        #                  WRITE TAB                  #
+        # --------------------------------------------#
 
-        # Create write tab widgets
-        write_tab = QWidget()
+        # Create widgets
         self.write_button = QPushButton("Write")
         self.write_value = QLineEdit()
 
+        # Set parameters
         self.write_value.setPlaceholderText("Value")
-
-        # Write tab layouts
-        write_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
 
         # Add to layouts
         write_tab_layout.addWidget(self.write_value)
         write_tab_layout.addWidget(self.write_button)
 
-        write_tab.setLayout(write_tab_layout)
 
-        tabs.addTab(write_tab, "Write")
+        # --------------------------------------------#
+        #                  TREND TAB                  #
+        # --------------------------------------------#
 
-        # Create trend tab widgets
-        trend_tab = QWidget()
+        # Create widgets
         self.trend_button = QPushButton("Start Trend")
         self.trend_plot_button = QPushButton("Show Trend Plot")
         self.trend_rate = QDoubleSpinBox()
 
+        # Set parameters
         self.trend_rate.setRange(0.1, 60)
         self.trend_rate.setValue(1)
         self.trend_rate.setSuffix(" seconds between reads")
         self.trend_rate.setSingleStep(0.1)
-
-        # Trend tab layout
-        trend_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
 
         # Add to layouts
         trend_tab_layout.addWidget(self.trend_rate)
         trend_tab_layout.addWidget(self.trend_button)
         trend_tab_layout.addWidget(self.trend_plot_button)
 
-        trend_tab.setLayout(trend_tab_layout)
-
+        # Add tabs to tab widget
+        tabs.addTab(self.read_tab, "Read")
+        tabs.addTab(write_tab, "Write")
         tabs.addTab(trend_tab, "Trend")
+        tabs.addTab(monitor_tab, "Monitor")
 
-        # Create write tab widgets
-        monitor_tab = QWidget()
+        # --------------------------------------------#
+        #                 MONITOR TAB                 #
+        # --------------------------------------------#
+
+        # Create widgets
         self.monitor_button = QPushButton("Start Monitor")
         self.monitor_value = QLineEdit()
         self.monitor_rate = QDoubleSpinBox()
@@ -807,21 +941,16 @@ class MainWindow(QMainWindow):
         self.monitor_read_write_values = QLineEdit()
         self.monitor_read_write_values.setPlaceholderText("Values to Write On Event")
 
+        # Set parameters
         self.monitor_rate.setRange(0.1, 60)
         self.monitor_rate.setValue(1)
         self.monitor_rate.setSuffix(" seconds between reads")
         self.monitor_rate.setSingleStep(0.1)
-
         self.monitor_value.setPlaceholderText("Value to Monitor")
 
-        # Monitor tab layouts
-        monitor_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
-        self.monitor_radio_layout = QHBoxLayout()
-
+        # Add to layouts
         self.monitor_radio_layout.addWidget(self.read_selected_radio)
         self.monitor_radio_layout.addWidget(self.write_selected_radio)
-
-        # Add to layouts
         monitor_tab_layout.addWidget(self.monitor_value)
         monitor_tab_layout.addWidget(self.monitor_rate)
         monitor_tab_layout.addWidget(self.enable_event)
@@ -830,11 +959,11 @@ class MainWindow(QMainWindow):
         monitor_tab_layout.addWidget(self.monitor_read_write_tags)
         monitor_tab_layout.addWidget(self.monitor_read_write_values)
 
+        # Set tab layouts
+        self.read_tab.setLayout(read_tab_layout)
+        write_tab.setLayout(write_tab_layout)
+        trend_tab.setLayout(trend_tab_layout)
         monitor_tab.setLayout(monitor_tab_layout)
-
-        tabs.addTab(monitor_tab, "Monitor")
-
-        yaml_file_layout = QHBoxLayout()
 
         # Create main layout widgets
         self.ip_input = QLineEdit()
@@ -842,40 +971,39 @@ class MainWindow(QMainWindow):
         self.yaml_enabled = QCheckBox("Read/Store to YAML")
         self.yaml_file = QLineEdit()
         self.yaml_file_browser = QPushButton("Browse")
+        self.connect_button = QPushButton("Connect")
+        self.results = QPlainTextEdit()
 
+        # Set parameters
         self.tag_input.setPlaceholderText("Tag")
         self.ip_input.setMaxLength(15)
         self.ip_input.setPlaceholderText("IP Address")
+        self.results.setReadOnly(True)
 
-        yaml_file_layout.addWidget(self.yaml_file)
-        yaml_file_layout.addWidget(self.yaml_file_browser)
-
-        self.yaml_file_browser.clicked.connect(lambda: self.yaml_file.setText(QFileDialog.getOpenFileName()[0]))
-
-        # Add to main layout
+        # Add to layouts
         ip_layout.addWidget(self.ip_input)
-        self.connect_button = QPushButton("Connect")
         ip_layout.addWidget(self.connect_button)
         entry_layout.addLayout(ip_layout)
+        yaml_file_layout.addWidget(self.yaml_file)
+        yaml_file_layout.addWidget(self.yaml_file_browser)
         entry_layout.addWidget(self.tag_input)
         entry_layout.addWidget(self.yaml_enabled)
         entry_layout.addLayout(yaml_file_layout)
         entry_layout.addWidget(tabs)
-        self.results = QPlainTextEdit()
-        self.results.setReadOnly(True)
         results_layout.addWidget(self.results)
 
-        self.connect_button.clicked.connect(lambda: connect_to_plc(self.ip_input.text(), self.connect_button, self))
-
+        # Add to main layout
         main_layout.addLayout(entry_layout)
-
-        # Add results layout to main layout
         main_layout.addLayout(results_layout)
 
         # Set central widget
         widget = QWidget()
         widget.setLayout(main_layout)
         self.setCentralWidget(widget)
+
+        # --------------------------------------------#
+        #               CONNECT EVENTS                #
+        # --------------------------------------------#
 
         # Connect read button to read_tag function
         self.read_button.clicked.connect(
@@ -917,8 +1045,10 @@ class MainWindow(QMainWindow):
 
         self.trend_button.clicked.connect(self.trender_thread)
         self.trend_plot_button.clicked.connect(lambda: plot_trend_data(self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
-
         self.monitor_button.clicked.connect(self.monitorer_thread)
+        self.connect_button.clicked.connect(lambda: connect_to_plc(self.ip_input.text(), self.connect_button, self))
+        self.yaml_file_browser.clicked.connect(lambda: self.yaml_file.setText(QFileDialog.getOpenFileName()[0]))
+
         # Load stored data if available
         try:
             f = open('plc_readwrite.pckl', 'rb')
