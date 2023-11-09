@@ -481,7 +481,7 @@ def process_trend_data(tag, results, timestamps, single_tag, yaml_enabled, yaml_
         if type(results[0]) == dict:
             # get keys from first dict in list
             keys = ['Trend Duration']
-            keys = keys + [key for key in trender.results[0].keys()]
+            keys = keys + [key for key in results[0].keys()]
         else:
             keys = ['Trend Duration', 'Value']
 
