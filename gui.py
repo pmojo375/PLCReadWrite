@@ -21,7 +21,9 @@ from PySide2.QtWidgets import (
     QAction,
     QToolBar,
     QAction,
-    QStatusBar
+    QStatusBar,
+    QMessageBox,
+    QComboBox,
 )
 from PySide2 import QtGui
 import yaml
@@ -53,6 +55,7 @@ def connect_to_plc(ip, connect_button, main_window):
         connect_button.setText("Connect")
         plc = None
         main_window.stop_plc_connection_check()
+        main_window.disable_buttons()
     else:
         plc_instance = LogixDriver(ip)
         plc_instance.open()
@@ -65,6 +68,8 @@ def connect_to_plc(ip, connect_button, main_window):
         plc = plc_instance
 
         main_window.start_plc_connection_check()
+        main_window.enable_buttons()
+        main_window.showConnectedDialog()
 
 
 def check_plc_connection(plc, main_window):
@@ -86,8 +91,9 @@ def check_plc_connection(plc, main_window):
             except:
                 main_window.stop_plc_connection_check()
                 return False
-
-    main_window.stop_plc_connection_check()
+        else:
+            main_window.stop_plc_connection_check()
+            return False
     return False
                 
 
@@ -107,20 +113,25 @@ def serialize_to_yaml(data, **kwargs):
 
     with open(yaml_file, 'w') as f:
 
-        yaml_data = []
+        data = data_to_dict(data)
 
-        if isinstance(data, list):
-            for tag in data:
-                if isinstance(tag.value, list):
-                    for i, value in enumerate(tag.value):
-                        yaml_data.append({f'{tag.tag}[{str(i)}]': value})
-                else:
-                    yaml_data.append({tag.tag: tag.value})
-        else:
-            yaml_data.append({tag.tag: tag.value})
+        yaml.safe_dump(data, f, default_flow_style=False)
 
-        yaml.safe_dump(yaml_data, f, default_flow_style=False)
+def data_to_dict(data):
 
+    processed_data = []
+
+    if isinstance(data, list):
+        for tag in data:
+            if isinstance(tag.value, list):
+                for i, value in enumerate(tag.value):
+                    processed_data.append({f'{tag.tag}[{str(i)}]': value})
+            else:
+                processed_data.append({tag.tag: tag.value})
+    else:
+        processed_data.append({tag.tag: tag.value})    
+
+    return processed_data
 
 def deserialize_from_yaml(yaml_name):
     """
@@ -188,6 +199,23 @@ def process_yaml_read(data):
     return processed_data
 
 
+def process_csv_read(csv_file):
+    """
+    Processes CSV data and returns a list of processed data.
+
+    Args:
+        csv_file (str): The name of the CSV file to process.
+
+    Returns:
+        list: A list of processed data.
+    """
+    with open(csv_file, 'r') as f:
+        reader = csv.DictReader(f)
+        processed_data = []
+        for row in reader:
+            processed_data.append((row['tag'], set_data_type(row['value'], row['tag'])))
+    return processed_data
+
 def crawl_and_format(obj, name, data):
     """
     Recursively crawls through a dictionary or list and formats the data into a flattened dictionary.
@@ -216,7 +244,7 @@ def crawl_and_format(obj, name, data):
     return data
 
 
-def read_tag(ip, tags, result_window, **kwargs):
+def read_tag(ip, tags, result_window, plc, **kwargs):
     """
     Reads the values of the given tags from the PLC with the given IP address and displays the results in the given result window.
 
@@ -224,10 +252,10 @@ def read_tag(ip, tags, result_window, **kwargs):
         ip (str): The IP address of the PLC to read from.
         tags (list): A list of tag names to read from the PLC.
         result_window (QPlainTextEdit): The window to display the results in.
+        plc (LogixDriver): An optional pre-initialized LogixDriver instance to use for reading the tags.
         **kwargs: Additional keyword arguments.
             store_to_yaml (bool): Whether to store the results in a YAML file. Default is False.
             yaml_file (str): The name of the YAML file to store the results in. Default is 'tag_values.yaml'.
-            plc (LogixDriver): An optional pre-initialized LogixDriver instance to use for reading the tags.
 
     Returns:
         list: A list of dictionaries containing the tag names and their corresponding values.
@@ -237,24 +265,29 @@ def read_tag(ip, tags, result_window, **kwargs):
 
     tags = [t.strip() for t in tags.split(',')]
         
-    store_to_yaml = kwargs.get('store_to_yaml', False)
-    yaml_file = kwargs.get('yaml_file', 'tag_values.yaml')
-    plc = kwargs.get('plc', None)
+    store_to_file = kwargs.get('store_to_file', False)
+    file_selection = kwargs.get('file_selection', 0)
+
+    if file_selection == 0:
+        file_name = kwargs.get('file_name', 'tag_values.yaml')
+    elif file_selection == 1:
+        file_name = kwargs.get('file_name', 'tag_values.csv')
 
     return_data = []
 
     try:
-        if plc == None:
-            with LogixDriver(ip) as plc:
-                ret = plc.read(*tags)
-        else:
-            ret = plc.read(*tags)
+        ret = plc.read(*tags)
 
-        if store_to_yaml:
-            if isinstance(ret, list):
-                serialize_to_yaml(ret, yaml_file=yaml_file)
-            else:
-                serialize_to_yaml([ret], yaml_file=yaml_file)
+        if store_to_file:
+            if not isinstance(ret, list):
+                ret = [ret]
+            
+            if file_selection == 0:
+                serialize_to_yaml(ret, yaml_file=file_name)
+            elif file_selection == 1:
+                data = data_to_dict(ret)
+                data = [flatten_dict(item) for item in data]
+                write_to_csv(data, file_name)
 
         # loop through each tag in the list
         if len(tags) == 1:
@@ -408,7 +441,7 @@ def set_data_type(value, tag):
         return None
 
 
-def write_tag(ip, tags, values, results, **kwargs):
+def write_tag(ip, tags, values, results, plc, **kwargs):
     """
     Writes a value to a tag in a PLC.
 
@@ -416,21 +449,24 @@ def write_tag(ip, tags, values, results, **kwargs):
         ip (str): The IP address of the PLC.
         tag (str): The tag to write to.
         value (any): The value to write to the tag.
-        plc (LogixDriver, optional): An existing LogixDriver instance to use instead of creating a new one.
+        plc (LogixDriver): An existing LogixDriver instance to use instead of creating a new one.
 
     Returns:
         bool: True if the write was successful, False otherwise.
     """
-    print(tags)
+
     save_history(ip, tags)
 
-    plc = kwargs.get('plc', None)
-    yaml_enabed = kwargs.get('yaml_enabled', False)
-    yaml_file = kwargs.get('yaml_file', 'tag_values.yaml')
+    file_enabled = kwargs.get('file_enabled', False)
+    file_selection = kwargs.get('file_selection', 0)
+    if file_selection == 0:
+        file_name = kwargs.get('file_name', 'tag_values.yaml')
+    elif file_selection == 1:
+        file_name = kwargs.get('file_name', 'tag_values.csv')
 
     tags = [t.strip() for t in tags.split(',')]
 
-    if not yaml_enabed:
+    if not file_enabled:
         values = [t.strip() for t in values.split(',')]
 
         write_data = []
@@ -439,31 +475,22 @@ def write_tag(ip, tags, values, results, **kwargs):
             write_data.append((tag, set_data_type(values[i], tag)))
 
         try:
-            if plc == None:
-                with LogixDriver(ip) as plc:
-                    if plc.write(*write_data):
-                        results.appendPlainText(f"Successfully wrote to tags to PLC")
-            else:
-
-
-                if plc.write(*write_data):
-                    results.appendPlainText(f"Successfully wrote to tags to PLC")
+            if plc.write(*write_data):
+                results.appendPlainText(f"Successfully wrote to tags to PLC")
         except Exception as e:
             print(f"Error in write_tag: {e}")
             return None
     else:
-
-        tags = process_yaml_read(deserialize_from_yaml(yaml_file))
+        if file_selection == 0:
+            tags = process_yaml_read(deserialize_from_yaml(file_name))
+        elif file_selection == 1:
+            tags = process_csv_read(file_name)
 
         try:
-            if plc == None:
-                with LogixDriver(ip) as plc:
-                    return plc.write(*tags)
-            else:
-                if plc.write(*tags):
-                    results.appendPlainText(f"Successfully wrote to tags to PLC")
+            if plc.write(*tags):
+                results.appendPlainText(f"Successfully wrote to tags to PLC")
         except Exception as e:
-            print(f"Error in write_tags_from_yaml: {e}")
+            print(f"Error in write_tag: {e}")
             return None
 
 
@@ -599,16 +626,21 @@ def flatten_dict(d, parent_key='', sep='.'):
             items.append((new_key, v))
     return dict(items)
 
+
 def yaml_to_csv(yaml_file, csv_file):
     with open(yaml_file, 'r') as jf:
         data = yaml.safe_load(jf)
 
     flattened_data = [flatten_dict(item) for item in data]
 
+    write_to_csv(flattened_data, csv_file)
+
+
+def write_to_csv(data, csv_file):
     with open(csv_file, 'w', newline='') as cf:
         writer = csv.DictWriter(cf, fieldnames=['tag', 'value'])
         writer.writeheader()
-        for item in flattened_data:
+        for item in data:
             for tag, value in item.items():
                 writer.writerow({'tag': tag, 'value': value})
 
@@ -662,11 +694,7 @@ class Trender(QObject):
         formatted_tags = [t.strip() for t in self.tags.split(',')]
 
         try:
-            if plc == None:
-                self.plc = LogixDriver(self.ip)
-                self.plc.open()
-            else:
-                self.plc = plc
+            self.plc = plc
         except Exception as e:
             print(f"Error in Trender: {e}")
 
@@ -779,15 +807,6 @@ class Monitorer(QObject):
 
         if self.tags_to_read_write != None:
             self.read_write_tag_list = [t.strip() for t in self.tags_to_read_write.split(',')]
-            
-        try:
-            if plc == None:
-                self.plc = LogixDriver(self.ip)
-                self.plc.open()
-            else:
-                self.plc = plc
-        except Exception as e:
-            print(f"Error in Monitorer: {e}")
 
         self.update.emit('Starting Monitor...')
 
@@ -836,7 +855,7 @@ class Monitorer(QObject):
                         for i, value in enumerate([t.strip() for t in self.values_to_write.split(',')]):
                             tag_write_data.append((self.read_write_tag_list[i], set_data_type(value, self.tags_to_read_write[i])))
                             
-                        plc.write(*tag_write_data)
+                        self.plc.write(*tag_write_data)
                         self.update.emit(f'Successfully wrote to tags: {self.tags_to_read_write}')
                         
                     self.yaml_data.append(yaml_temp)
@@ -855,6 +874,8 @@ class Monitorer(QObject):
         """
         self.running = False
         self.finished.emit()
+
+
 
 class AboutWindow(QWidget):
     """
@@ -890,6 +911,15 @@ class MainWindow(QMainWindow):
         if self.w is None:
             self.w = AboutWindow()
         self.w.show()
+
+    def showConnectedDialog(self):
+        msgBox = QMessageBox()
+        msgBox.setIcon(QMessageBox.Information)
+        msgBox.setText("PLC Connected succesfully!")
+        msgBox.setWindowTitle("PLC Connected")
+        msgBox.setStandardButtons(QMessageBox.Ok)
+
+        returnValue = msgBox.exec()
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -937,7 +967,8 @@ class MainWindow(QMainWindow):
         trend_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
         monitor_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
         self.monitor_radio_layout = QHBoxLayout()
-        yaml_file_layout = QHBoxLayout()
+        file_layout = QHBoxLayout()
+        selection_layout = QHBoxLayout()
 
         # Create tab widget
         tabs = QTabWidget()
@@ -954,6 +985,9 @@ class MainWindow(QMainWindow):
         # Create widgets
         self.read_button = QPushButton("Read")
 
+        # Set parameters
+        self.read_button.setDisabled(True)
+
         # Add to layouts
         read_tab_layout.addWidget(self.read_button)
 
@@ -968,6 +1002,7 @@ class MainWindow(QMainWindow):
 
         # Set parameters
         self.write_value.setPlaceholderText("Value")
+        self.write_button.setDisabled(True)
 
         # Add to layouts
         write_tab_layout.addWidget(self.write_value)
@@ -988,6 +1023,7 @@ class MainWindow(QMainWindow):
         self.trend_rate.setValue(1)
         self.trend_rate.setSuffix(" seconds between reads")
         self.trend_rate.setSingleStep(0.1)
+        self.trend_button.setDisabled(True)
 
         # Add to layouts
         trend_tab_layout.addWidget(self.trend_rate)
@@ -1022,6 +1058,7 @@ class MainWindow(QMainWindow):
         self.monitor_rate.setSuffix(" seconds between reads")
         self.monitor_rate.setSingleStep(0.1)
         self.monitor_value.setPlaceholderText("Value to Monitor")
+        self.monitor_button.setDisabled(True)
 
         # Add to layouts
         self.monitor_radio_layout.addWidget(self.read_selected_radio)
@@ -1043,29 +1080,33 @@ class MainWindow(QMainWindow):
         # Create main layout widgets
         self.ip_input = QLineEdit()
         self.tag_input = QLineEdit()
-        self.yaml_enabled = QCheckBox("Read/Store to YAML")
-        self.yaml_file = QLineEdit()
-        self.yaml_file_browser = QPushButton("Browse")
+        self.file_enabled = QCheckBox("Read/Write To File")
+        self.file_name = QLineEdit()
+        self.file_browser = QPushButton("Browse")
         self.connect_button = QPushButton("Connect")
         self.results = QPlainTextEdit()
-        self.yaml_to_csv_button = QPushButton("Convert YAML File to CSV")
+        self.file_format_selection = QComboBox()
+        self.file_format = 0
 
         # Set parameters
         self.tag_input.setPlaceholderText("Tag")
         self.ip_input.setMaxLength(15)
         self.ip_input.setPlaceholderText("IP Address")
         self.results.setReadOnly(True)
+        self.file_format_selection.addItems(["YAML", "CSV"])
+        self.file_format_selection.currentIndexChanged.connect(self.file_format_changed)
 
         # Add to layouts
         ip_layout.addWidget(self.ip_input)
         ip_layout.addWidget(self.connect_button)
         entry_layout.addLayout(ip_layout)
-        yaml_file_layout.addWidget(self.yaml_file)
-        yaml_file_layout.addWidget(self.yaml_file_browser)
+        file_layout.addWidget(self.file_name)
+        file_layout.addWidget(self.file_browser)
+        selection_layout.addWidget(self.file_enabled)
+        selection_layout.addWidget(self.file_format_selection)
         entry_layout.addWidget(self.tag_input)
-        entry_layout.addWidget(self.yaml_enabled)
-        entry_layout.addLayout(yaml_file_layout)
-        entry_layout.addWidget(self.yaml_to_csv_button)
+        entry_layout.addLayout(selection_layout)
+        entry_layout.addLayout(file_layout)
         entry_layout.addWidget(tabs)
         results_layout.addWidget(self.results)
 
@@ -1083,57 +1124,15 @@ class MainWindow(QMainWindow):
         # --------------------------------------------#
 
         # Connect read button to read_tag function
-        self.read_button.clicked.connect(
-            lambda: read_tag(
-                self.ip_input.text(),
-                self.tag_input.text(),
-                self.results,
-                store_to_yaml=self.yaml_enabled.isChecked(),
-                yaml_file=self.yaml_file.text(),
-                plc=plc
-            ) if self.yaml_file.text() != '' else read_tag(
-                self.ip_input.text(),
-                self.tag_input.text(),
-                self.results,
-                store_to_yaml=self.yaml_enabled.isChecked(),
-                plc=plc
-            )
-        )
+        self.read_button.clicked.connect(self.read_tag_button_clicked)
         
-        # Connect write button to write_tag function
-        self.write_button.clicked.connect(
-            lambda: write_tag(
-                self.ip_input.text(),
-                self.tag_input.text(),
-                self.write_value.text(),
-                self.results,
-                yaml_enabled=self.yaml_enabled.isChecked(),
-                yaml_file=self.yaml_file.text(),
-                plc=plc
-            ) if self.yaml_file.text() != '' else write_tag(
-                    self.ip_input.text(),
-                    self.tag_input.text(),
-                    self.write_value.text(),
-                    self.results,
-                    yaml_enabled=self.yaml_enabled.isChecked(),
-                    plc=plc
-            )
-        )
+        self.write_button.clicked.connect(self.write_tag_button_clicked)
 
         self.trend_button.clicked.connect(self.trender_thread)
         self.trend_plot_button.clicked.connect(lambda: plot_trend_data(self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
         self.monitor_button.clicked.connect(self.monitorer_thread)
         self.connect_button.clicked.connect(lambda: connect_to_plc(self.ip_input.text(), self.connect_button, self))
-        self.yaml_file_browser.clicked.connect(lambda: self.yaml_file.setText(QFileDialog.getOpenFileName()[0]))
-        self.yaml_to_csv_button.clicked.connect(
-            lambda: yaml_to_csv(
-                self.yaml_file.text(),
-                'tag_values.csv'
-            ) if self.yaml_file.text() != '' else yaml_to_csv(
-                'tag_values.yaml',
-                'tag_values.csv'
-            )
-        )
+        self.file_browser.clicked.connect(lambda: self.file_name.setText(QFileDialog.getOpenFileName()[0]))
 
         # Load stored data if available
         try:
@@ -1145,6 +1144,63 @@ class MainWindow(QMainWindow):
         except FileNotFoundError:
             pass
 
+    def file_format_changed(self, i):
+        self.file_format = i
+        print(i)
+
+    def showNotConnectedDialog(self):
+        msgBox = QMessageBox()
+        msgBox.setIcon(QMessageBox.Information)
+        msgBox.setText("Please Connect to PLC.")
+        msgBox.setWindowTitle("PLC Not Connected")
+        msgBox.setStandardButtons(QMessageBox.Ok)
+
+        returnValue = msgBox.exec()
+
+
+    def showLostConnectionDialog(self):
+        msgBox = QMessageBox()
+        msgBox.setIcon(QMessageBox.Information)
+        msgBox.setText("PLC Lost Connection, please reconnect.")
+        msgBox.setWindowTitle("PLC Lost Connection")
+        msgBox.setStandardButtons(QMessageBox.Ok)
+
+        returnValue = msgBox.exec()
+
+    
+    def enable_buttons(self):
+        self.trend_button.setDisabled(False)
+        self.read_button.setDisabled(False)
+        self.write_button.setDisabled(False)
+        self.monitor_button.setDisabled(False)
+
+    
+    def disable_buttons(self):
+        self.trend_button.setDisabled(True)
+        self.read_button.setDisabled(True)
+        self.write_button.setDisabled(True)
+        self.monitor_button.setDisabled(True)
+
+
+    def read_tag_button_clicked(self):
+        if check_plc_connection(plc, self):
+            if self.file_name.text() != '':
+                read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
+            else:
+                read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
+        else:
+            self.showNotConnectedDialog()
+
+
+    def write_tag_button_clicked(self):
+        if check_plc_connection(plc, self):
+            if self.file_name.text() != '':
+                write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_name=self.file_file.text(), file_selection = self.file_format)
+            else:
+                write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_selection = self.file_format)
+        else:
+            self.showNotConnectedDialog()
+
     def print_resuts(self, results):
         self.results.appendPlainText(results)
 
@@ -1154,7 +1210,7 @@ class MainWindow(QMainWindow):
 
     def trender_thread(self):
         if self.trender.running:
-            process_trend_data(self.trender.tags, self.trender.results, self.trender.timestamps, self.trender.single_tag, self.yaml_enabled.isChecked(), self.yaml_file.text())
+            process_trend_data(self.trender.tags, self.trender.results, self.trender.timestamps, self.trender.single_tag, self.file_enabled.isChecked(), self.file_name.text())
             self.trender.stop()
             self.trend_button.setText("Start Trend")
         else:
@@ -1191,7 +1247,6 @@ class MainWindow(QMainWindow):
 
     def stop_plc_connection_check(self):
         self.plc_connection_check_timer.stop()
-        self.results.appendPlainText('PLC Connection Lost')
         self.connect_button.setText("Connect")
 
 
