@@ -1,8 +1,8 @@
 import sys
 from pycomm3 import LogixDriver
 import qdarktheme
-from PySide2.QtCore import Qt, QThread, Signal, QObject, QTimer
-from PySide2.QtWidgets import (
+from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QRegularExpression
+from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QFileDialog,
@@ -16,16 +16,15 @@ from PySide2.QtWidgets import (
     QRadioButton,
     QWidget,
     QPlainTextEdit,
-    QMenuBar,
     QLabel,
-    QAction,
-    QToolBar,
-    QAction,
-    QStatusBar,
     QMessageBox,
     QComboBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
 )
-from PySide2 import QtGui
+from PySide6 import QtGui
+from PySide6.QtGui import QRegularExpressionValidator
 import yaml
 import pickle
 import re
@@ -61,7 +60,7 @@ def connect_to_plc(ip, connect_button, main_window):
         plc_instance.open()
 
         if plc_instance.connected:
-            tag_types = get_tags_from_yaml(ip, plc=plc_instance)
+            tag_types = get_tags_from_plc(ip, plc=plc_instance)
 
             connect_button.setText("Disconnect")
 
@@ -117,6 +116,7 @@ def serialize_to_yaml(data, **kwargs):
 
         yaml.safe_dump(data, f, default_flow_style=False)
 
+
 def data_to_dict(data):
 
     processed_data = []
@@ -132,6 +132,7 @@ def data_to_dict(data):
         processed_data.append({tag.tag: tag.value})    
 
     return processed_data
+
 
 def deserialize_from_yaml(yaml_name):
     """
@@ -215,6 +216,7 @@ def process_csv_read(csv_file):
         for row in reader:
             processed_data.append((row['tag'], set_data_type(row['value'], row['tag'])))
     return processed_data
+
 
 def crawl_and_format(obj, name, data):
     """
@@ -307,7 +309,7 @@ def read_tag(ip, tags, result_window, plc, **kwargs):
         print(f"Error in read_tag: {e}")
 
 
-def get_tags_from_yaml(ip, **kwargs):
+def get_tags_from_plc(ip, plc):
     """
     Gets the data types from the YAML data.
 
@@ -317,32 +319,27 @@ def get_tags_from_yaml(ip, **kwargs):
     Returns:
         list: The list of data types.
     """
-    ret = {}
-
-    plc = kwargs.get('plc', None)
+    tag_list = {}
 
     try:
-        if plc == None:
-            with LogixDriver(ip) as plc:
-                data = plc.tags_json
-        else:
-            data = plc.tags_json
+        data = plc.tags_json
 
         for tag_name in data.keys():
-            tag = data[tag_name]
-            if isinstance(tag['data_type'], str):
-                ret[tag_name] = tag['data_type']
-            elif isinstance(tag['data_type'], dict):
-                internal_tags = tag['data_type']['internal_tags']
-                ret = process_structure(internal_tags, ret, tag_name)
+            
+            tag_data_type = data[tag_name]['data_type']
+            
+            if isinstance(tag_data_type, str):
+                tag_list[tag_name] = tag_data_type
+            elif isinstance(tag_data_type, dict):
+                tag_list = extract_child_data_types(tag_data_type['internal_tags'], tag_list, tag_name)
 
-        return ret
+        return tag_list
     except Exception as e:
-        print(f"Error in get_tags_from_yaml: {e}")
+        print(f"Error in get_tags_from_plc function: {e}")
         return None
 
 
-def process_structure(structure, array, name):
+def extract_child_data_types(structure, array, name):
     """
     Recursively processes the structure of the YAML data and appends the data types to the array.
 
@@ -362,7 +359,7 @@ def process_structure(structure, array, name):
             if isinstance(data_type, str):
                 array[f'{name}.{child}'] = data_type
             elif isinstance(data_type, dict):
-                array = process_structure(data_type['internal_tags'], array, f'{name}.{child}')
+                array = extract_child_data_types(data_type['internal_tags'], array, f'{name}.{child}')
     
     return array
 
@@ -511,23 +508,6 @@ def save_history(ip, tag):
         f.close()
 
 
-def validate_ip(ip):
-    """
-    Validates if the given IP address is in the correct format.
-
-    Args:
-        ip (str): The IP address to validate.
-
-    Returns:
-        bool: True if the IP address is in the correct format, False otherwise.
-    """
-    pattern = re.compile(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
-    if pattern.match(ip):
-        return True
-    else:
-        return False
-
-
 def plot_trend_data(tag, results, timestamps, single_tag):
 
     if single_tag:
@@ -556,6 +536,7 @@ def plot_trend_data(tag, results, timestamps, single_tag):
             print('\n****** Can only plot elementary data types ******\n')
     else:
         print('\n****** Cannot plot multiple tags yet ******\n')
+
 
 def process_trend_data(tag, results, timestamps, single_tag, yaml_enabled, yaml_file):
     """
@@ -643,6 +624,7 @@ def write_to_csv(data, csv_file):
         for item in data:
             for tag, value in item.items():
                 writer.writerow({'tag': tag, 'value': value})
+
 
 class Trender(QObject):
     """
@@ -876,7 +858,6 @@ class Monitorer(QObject):
         self.finished.emit()
 
 
-
 class AboutWindow(QWidget):
     """
     This "window" is a QWidget. If it has no parent, it
@@ -904,7 +885,28 @@ class AboutWindow(QWidget):
         layout.addWidget(self.about_label)
         layout.addWidget(self.description_label)
         self.setLayout(layout)
+        
 
+# Custom table widget for displaying tag-value pairs
+class TableView(QTableWidget):
+    def __init__(self, *args):
+        QTableWidget.__init__(self, *args)
+        self.setHorizontalHeaderLabels(['Tag', 'Value'])
+        self.resizeRowsToContents()
+        
+        # Set columns to automatically resize and fill the widget
+        header = self.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+ 
+    def setData(self, data):
+        row_count = self.rowCount()
+        self.setRowCount(row_count + 1)
+
+        for n, key in enumerate(sorted(data.keys())):
+            for m, item in enumerate(data[key]):
+                newitem = QTableWidgetItem(item)
+                self.setItem(m, n, newitem)
+        
 
 class MainWindow(QMainWindow):
     def show_about_window(self):
@@ -923,7 +925,10 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super(MainWindow, self).__init__()
-
+        
+        ipRegex = QRegularExpression(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
+        ipValidator = QRegularExpressionValidator(ipRegex)
+        
         self.w = None
         self.setWindowTitle("PLC Read/Write")
 
@@ -1095,7 +1100,9 @@ class MainWindow(QMainWindow):
         self.results.setReadOnly(True)
         self.file_format_selection.addItems(["YAML", "CSV"])
         self.file_format_selection.currentIndexChanged.connect(self.file_format_changed)
-
+        self.ip_input.setValidator(ipValidator)
+        self.ip_input.textChanged.connect(self.on_ip_text_changed)
+        
         # Add to layouts
         ip_layout.addWidget(self.ip_input)
         ip_layout.addWidget(self.connect_button)
@@ -1109,6 +1116,18 @@ class MainWindow(QMainWindow):
         entry_layout.addLayout(file_layout)
         entry_layout.addWidget(tabs)
         results_layout.addWidget(self.results)
+        
+        # --------------------------------------------#
+        # NEW TEST TABLE CODE
+                                 
+        self.add_to_table_button = QPushButton("Add To Table")
+        results_layout.addWidget(self.add_to_table_button)
+        
+        self.data = {'Tag': [], 'Value': []}
+        self.table = TableView(0, 2)
+        results_layout.addWidget(self.table)
+        
+        self.add_to_table_button.clicked.connect(lambda: self.add_to_table(self.data))
 
         # Add to main layout
         main_layout.addLayout(entry_layout)
@@ -1118,6 +1137,9 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         widget.setLayout(main_layout)
         self.setCentralWidget(widget)
+        
+        # END NEW TEST TABLE CODE
+        # --------------------------------------------#
 
         # --------------------------------------------#
         #               CONNECT EVENTS                #
@@ -1131,7 +1153,7 @@ class MainWindow(QMainWindow):
         self.trend_button.clicked.connect(self.trender_thread)
         self.trend_plot_button.clicked.connect(lambda: plot_trend_data(self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
         self.monitor_button.clicked.connect(self.monitorer_thread)
-        self.connect_button.clicked.connect(lambda: connect_to_plc(self.ip_input.text(), self.connect_button, self))
+        self.connect_button.clicked.connect(self.connect_button_clicked)
         self.file_browser.clicked.connect(lambda: self.file_name.setText(QFileDialog.getOpenFileName()[0]))
 
         # Load stored data if available
@@ -1143,10 +1165,29 @@ class MainWindow(QMainWindow):
             self.tag_input.setText(str(data_stored[1]))
         except FileNotFoundError:
             pass
+        
+    # --------------------------------------------#
+    
+    def add_to_table(self, data):
+        self.data['Tag'].append('New Tag')
+        self.data['Value'].append('New Value')
+        
+        self.table.setData(data)
+        print(self.data)
+        
+    # --------------------------------------------#
+
+    def on_ip_text_changed(self, text):
+        if self.ip_input.hasAcceptableInput():
+            self.ip_input.setStyleSheet("color: white;")
+        else:
+            self.ip_input.setStyleSheet("color: red;")
+
 
     def file_format_changed(self, i):
         self.file_format = i
         print(i)
+
 
     def showNotConnectedDialog(self):
         msgBox = QMessageBox()
@@ -1180,6 +1221,13 @@ class MainWindow(QMainWindow):
         self.read_button.setDisabled(True)
         self.write_button.setDisabled(True)
         self.monitor_button.setDisabled(True)
+        
+        
+    def connect_button_clicked(self):
+        if self.ip_input.hasAcceptableInput():
+            connect_to_plc(self.ip_input.text(), self)
+        else:
+            self.results.appendPlainText("IP address is invalid.")
 
 
     def read_tag_button_clicked(self):
@@ -1204,9 +1252,11 @@ class MainWindow(QMainWindow):
     def print_resuts(self, results):
         self.results.appendPlainText(results)
 
+
     def update_trend_data(self, results, timestamps):
         self.trender_results = results
         self.trender_timestamps = timestamps
+
 
     def trender_thread(self):
         if self.trender.running:
@@ -1222,6 +1272,7 @@ class MainWindow(QMainWindow):
                 self.trender.running = True
                 self.trend_thread.start()
                 self.trend_button.setText("Stop Trend")
+
 
     def monitorer_thread(self):
         if self.monitorer.running:
@@ -1242,8 +1293,10 @@ class MainWindow(QMainWindow):
                 self.monitor_thread.start()
                 self.monitor_button.setText("Stop Monitor")
     
+    
     def start_plc_connection_check(self):
         self.plc_connection_check_timer.start(5000)
+
 
     def stop_plc_connection_check(self):
         self.plc_connection_check_timer.stop()
