@@ -1,1 +1,4 @@
 plc_readwrite.pckl
+venv
+__pycache__
+tags.json

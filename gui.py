@@ -33,6 +33,7 @@ import matplotlib.pyplot as plt
 import csv
 
 tag_types = None
+tag_dimensions = None
 plc = None
 
 def connect_to_plc(ip, connect_button, main_window):
@@ -309,58 +310,61 @@ def read_tag(ip, tags, result_window, plc, **kwargs):
         print(f"Error in read_tag: {e}")
 
 
-def get_tags_from_plc(ip, plc):
-    """
-    Gets the data types from the YAML data.
-
-    Args:
-        data (dict): The YAML data.
-
-    Returns:
-        list: The list of data types.
-    """
+def get_tags_from_plc():
     tag_list = {}
 
     try:
-        data = plc.tags_json
+        with open('tags.json', 'r') as f:
+            data = json.load(f)
 
-        for tag_name in data.keys():
-            
-            tag_data_type = data[tag_name]['data_type']
-            
+        for tag_name, tag_info in data.items():
+            tag_data_type = tag_info['data_type']
+            tag_dimensions = tag_info.get('dimensions', [0])
+
             if isinstance(tag_data_type, str):
-                tag_list[tag_name] = tag_data_type
+                tag_list[tag_name] = {
+                    'data_type': tag_data_type,
+                    'dimensions': tag_dimensions
+                }
             elif isinstance(tag_data_type, dict):
-                tag_list = extract_child_data_types(tag_data_type['internal_tags'], tag_list, tag_name)
+                # Store the parent structure
+                tag_list[tag_name] = {
+                    'data_type': tag_data_type['name'],
+                    'dimensions': tag_dimensions,
+                    'structure': True
+                }
+                # Recursively store children
+                tag_list = extract_child_data_types(tag_data_type['internal_tags'], tag_list, tag_name, tag_dimensions)
 
         return tag_list
     except Exception as e:
         print(f"Error in get_tags_from_plc function: {e}")
         return None
-
-
-def extract_child_data_types(structure, array, name):
-    """
-    Recursively processes the structure of the YAML data and appends the data types to the array.
-
-    Args:
-        structure (dict): The structure of the YAML data.
-        array (list): The list to append the data types to.
-        name (str): The name of the current tag.
-
-    Returns:
-        list: The updated array with the data types appended.
-    """
-    for child in structure.keys():
-        data_type = structure[child]['data_type']
-        if child.startswith('_') or child.startswith('ZZZZZZZZZZ'):
-            pass
-        else:
-            if isinstance(data_type, str):
-                array[f'{name}.{child}'] = data_type
-            elif isinstance(data_type, dict):
-                array = extract_child_data_types(data_type['internal_tags'], array, f'{name}.{child}')
     
+def extract_child_data_types(structure, array, name, parent_dimensions):
+    for child_name, child_info in structure.items():
+        child_data_type = child_info['data_type']
+        child_array_length = child_info.get('array', 0)
+
+        if child_name.startswith('_') or child_name.startswith('ZZZZZZZZZZ'):
+            continue
+
+        full_tag_name = f'{name}.{child_name}'
+        if isinstance(child_data_type, str):
+            array[full_tag_name] = {
+                'data_type': child_data_type,
+                'dimensions': [child_array_length] if child_array_length > 0 else [0]
+            }
+        elif isinstance(child_data_type, dict):
+            # Store the structure itself
+            array[full_tag_name] = {
+                'data_type': child_data_type['name'],
+                'dimensions': parent_dimensions,
+                'structure': True
+            }
+            # Recursively store children
+            array = extract_child_data_types(child_data_type['internal_tags'], array, full_tag_name, parent_dimensions)
+
     return array
 
 
@@ -382,7 +386,7 @@ def set_data_type(value, tag):
         # Check if the tag is in the tag_list
         if tag in tag_types:
             # Get the data type from the tag_list
-            type = tag_types[tag]
+            type = tag_types[tag]['data_type']
 
             # Set the data type based on the type from the tag_list
             if type == 'STRING':
