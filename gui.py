@@ -1237,15 +1237,37 @@ class MainWindow(QMainWindow):
             connect_to_plc(self.ip_input.text(), self)
         else:
             self.results.appendPlainText("IP address is invalid.")
+    
+    
+    def is_valid_tag_input(self, tags, tag_list):
+        # Validate format
+        pattern = r"^[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.\w+(?:\[\d+\])?)*(?:\{\d+\})?(?:,\s*[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.\w+(?:\[\d+\])?)*(?:\{\d+\})?)*$"
+        if not re.match(pattern, tags):
+            return False
+
+        # Process input by removing [x] and {x}
+        stripped_input = re.sub(r"(\[\d+\])|(\{\d+\})", "", tags)
+        input_tags = [tag.strip() for tag in stripped_input.split(',')]
+
+        # Check against dictionary
+        for input_tag in input_tags:
+            tag_components = input_tag.split('.')
+            if not any(all(tc == kc.split('.')[i] for i, tc in enumerate(tag_components) if i < len(kc.split('.'))) for kc in tag_types):
+                return False
+
+        return True
 
 
     def read_tag_button_clicked(self):
         if check_plc_connection(plc, self):
-            if self.tagLineEdit.hasAcceptableInput():
-                if self.file_name.text() != '':
-                    read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
+            if self.tag_input.hasAcceptableInput():
+                if self.is_valid_tag_input(self.tag_input.text(), tag_types):
+                    if self.file_name.text() != '':
+                        read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
+                    else:
+                        read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
                 else:
-                    read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
+                    self.results.appendPlainText("Tag or tags do not exist in PLC.")
             else:
                 self.results.appendPlainText("Tag input is invalid.")
         else:
