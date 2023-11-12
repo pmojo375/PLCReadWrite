@@ -927,7 +927,9 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
         
         ipRegex = QRegularExpression(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
+        tagRegex = QRegularExpression(r"^[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?(?:,\s*[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?)*$")
         ipValidator = QRegularExpressionValidator(ipRegex)
+        tagValidator = QRegularExpressionValidator(tagRegex)
         
         self.w = None
         self.setWindowTitle("PLC Read/Write")
@@ -1102,6 +1104,8 @@ class MainWindow(QMainWindow):
         self.file_format_selection.currentIndexChanged.connect(self.file_format_changed)
         self.ip_input.setValidator(ipValidator)
         self.ip_input.textChanged.connect(self.on_ip_text_changed)
+        self.tag_input.setValidator(tagValidator)
+        self.tag_input.textChanged.connect(self.on_tag_text_changed)
         
         # Add to layouts
         ip_layout.addWidget(self.ip_input)
@@ -1183,6 +1187,11 @@ class MainWindow(QMainWindow):
         else:
             self.ip_input.setStyleSheet("color: red;")
 
+    def on_tag_text_changed(self, text):
+        if self.tag_input.hasAcceptableInput():
+            self.tag_input.setStyleSheet("color: white;")
+        else:
+            self.tag_input.setStyleSheet("color: red;")
 
     def file_format_changed(self, i):
         self.file_format = i
@@ -1232,20 +1241,26 @@ class MainWindow(QMainWindow):
 
     def read_tag_button_clicked(self):
         if check_plc_connection(plc, self):
-            if self.file_name.text() != '':
-                read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
+            if self.tagLineEdit.hasAcceptableInput():
+                if self.file_name.text() != '':
+                    read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
+                else:
+                    read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
             else:
-                read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
+                self.results.appendPlainText("Tag input is invalid.")
         else:
             self.showNotConnectedDialog()
 
 
     def write_tag_button_clicked(self):
         if check_plc_connection(plc, self):
-            if self.file_name.text() != '':
-                write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_name=self.file_file.text(), file_selection = self.file_format)
+            if self.tagLineEdit.hasAcceptableInput():
+                if self.file_name.text() != '':
+                    write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_name=self.file_file.text(), file_selection = self.file_format)
+                else:
+                    write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_selection = self.file_format)
             else:
-                write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_selection = self.file_format)
+                self.results.appendPlainText("Tag input is invalid.")
         else:
             self.showNotConnectedDialog()
 
@@ -1309,4 +1324,4 @@ qdarktheme.setup_theme()
 window = MainWindow()
 window.show()
 
-app.exec_()
+app.exec()
