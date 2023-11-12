@@ -1239,7 +1239,7 @@ class MainWindow(QMainWindow):
             self.results.appendPlainText("IP address is invalid.")
     
     
-    def is_valid_tag_input(self, tags, tag_list):
+    def is_valid_tag_input(self, tags, tag_types):
         # Validate format
         pattern = r"^[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.\w+(?:\[\d+\])?)*(?:\{\d+\})?(?:,\s*[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.\w+(?:\[\d+\])?)*(?:\{\d+\})?)*$"
         if not re.match(pattern, tags):
@@ -1277,10 +1277,13 @@ class MainWindow(QMainWindow):
     def write_tag_button_clicked(self):
         if check_plc_connection(plc, self):
             if self.tagLineEdit.hasAcceptableInput():
-                if self.file_name.text() != '':
-                    write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_name=self.file_file.text(), file_selection = self.file_format)
+                if self.is_valid_tag_input(self.tag_input.text(), tag_types):
+                    if self.file_name.text() != '':
+                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_name=self.file_file.text(), file_selection = self.file_format)
+                    else:
+                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_selection = self.file_format)
                 else:
-                    write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_selection = self.file_format)
+                    self.results.appendPlainText("Tag or tags do not exist in PLC.")
             else:
                 self.results.appendPlainText("Tag input is invalid.")
         else:
@@ -1301,14 +1304,23 @@ class MainWindow(QMainWindow):
             self.trender.stop()
             self.trend_button.setText("Start Trend")
         else:
-            if not self.trend_thread.isRunning():
-                self.trender.ip = self.ip_input.text()
-                self.trender.tags = self.tag_input.text()
-                self.trender.interval = (self.trend_rate.value() * 1000)
-                self.trender.plc = plc
-                self.trender.running = True
-                self.trend_thread.start()
-                self.trend_button.setText("Stop Trend")
+            if check_plc_connection(plc, self):
+                if self.tagLineEdit.hasAcceptableInput():
+                    if self.is_valid_tag_input(self.tag_input.text(), tag_types):
+                        if not self.trend_thread.isRunning():
+                            self.trender.ip = self.ip_input.text()
+                            self.trender.tags = self.tag_input.text()
+                            self.trender.interval = (self.trend_rate.value() * 1000)
+                            self.trender.plc = plc
+                            self.trender.running = True
+                            self.trend_thread.start()
+                            self.trend_button.setText("Stop Trend")
+                    else:
+                        self.results.appendPlainText("Tag or tags do not exist in PLC.")
+                else:
+                    self.results.appendPlainText("Tag input is invalid.")
+            else:
+                self.showNotConnectedDialog()
 
 
     def monitorer_thread(self):
@@ -1316,19 +1328,28 @@ class MainWindow(QMainWindow):
             self.monitorer.stop()
             self.monitor_button.setText("Start Monitor")
         else:
-            if not self.monitor_thread.isRunning():
-                self.monitorer.ip = self.ip_input.text()
-                self.monitorer.tags_to_read_write = self.monitor_read_write_tags.text()
-                self.monitorer.values_to_write = self.monitor_read_write_values.text()
-                self.monitorer.read_selected = self.read_selected_radio.isChecked()
-                self.monitorer.write_selected = self.write_selected_radio.isChecked()
-                self.monitorer.tag = self.tag_input.text()
-                self.monitorer.value = set_data_type(self.monitor_value.text(), self.tag_input.text())
-                self.monitorer.interval = (self.monitor_rate.value() * 1000)
-                self.monitorer.plc = plc
-                self.monitorer.running = True
-                self.monitor_thread.start()
-                self.monitor_button.setText("Stop Monitor")
+            if check_plc_connection(plc, self):
+                if self.tagLineEdit.hasAcceptableInput():
+                    if self.is_valid_tag_input(self.tag_input.text(), tag_types):
+                        if not self.monitor_thread.isRunning():
+                            self.monitorer.ip = self.ip_input.text()
+                            self.monitorer.tags_to_read_write = self.monitor_read_write_tags.text()
+                            self.monitorer.values_to_write = self.monitor_read_write_values.text()
+                            self.monitorer.read_selected = self.read_selected_radio.isChecked()
+                            self.monitorer.write_selected = self.write_selected_radio.isChecked()
+                            self.monitorer.tag = self.tag_input.text()
+                            self.monitorer.value = set_data_type(self.monitor_value.text(), self.tag_input.text())
+                            self.monitorer.interval = (self.monitor_rate.value() * 1000)
+                            self.monitorer.plc = plc
+                            self.monitorer.running = True
+                            self.monitor_thread.start()
+                            self.monitor_button.setText("Stop Monitor")
+                    else:
+                        self.results.appendPlainText("Tag or tags do not exist in PLC.")
+                else:
+                    self.results.appendPlainText("Tag input is invalid.")
+            else:
+                self.showNotConnectedDialog()
     
     
     def start_plc_connection_check(self):
