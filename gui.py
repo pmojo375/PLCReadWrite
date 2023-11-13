@@ -1,7 +1,7 @@
 import sys
 from pycomm3 import LogixDriver
 import qdarktheme
-from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QRegularExpression
+from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QRegularExpression, QSettings
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -57,15 +57,12 @@ def connect_to_plc(ip, connect_button, main_window):
         main_window.stop_plc_connection_check()
         main_window.disable_buttons()
     else:
-        plc_instance = LogixDriver(ip)
-        plc_instance.open()
+        plc = LogixDriver(ip)
+        plc.open()
 
-        if plc_instance.connected:
-            tag_types = get_tags_from_plc(ip, plc=plc_instance)
-
+        if plc.connected:
+            tag_types = get_tags_from_plc(plc)
             connect_button.setText("Disconnect")
-
-        plc = plc_instance
 
         main_window.start_plc_connection_check()
         main_window.enable_buttons()
@@ -247,7 +244,7 @@ def crawl_and_format(obj, name, data):
     return data
 
 
-def read_tag(ip, tags, result_window, plc, **kwargs):
+def read_tag(ip, tags, result_window, plc, main_window, **kwargs):
     """
     Reads the values of the given tags from the PLC with the given IP address and displays the results in the given result window.
 
@@ -263,8 +260,6 @@ def read_tag(ip, tags, result_window, plc, **kwargs):
     Returns:
         list: A list of dictionaries containing the tag names and their corresponding values.
     """
-
-    save_history(ip, tags)
 
     tags = [t.strip() for t in tags.split(',')]
         
@@ -304,18 +299,27 @@ def read_tag(ip, tags, result_window, plc, **kwargs):
                 return_data.append(crawl_and_format(value, entry_tag, {}))
 
         for result in return_data:
-            for key, value in result.items():
-                result_window.appendPlainText(f"{key} = {value}")
+            result_window.appendPlainText(f'Reading Tags...\n')
+            for tag, value in result.items():
+
+                pattern = r'\{[^}]*\}'
+
+                tag = re.sub(pattern, '', tag)
+
+                result_window.appendPlainText(f"{tag} = {value}")
+                main_window.tag_read_history[tag] = value
+        
+        result_window.appendPlainText(f'')
+        main_window.add_to_table(main_window.tag_read_history)
     except Exception as e:
         print(f"Error in read_tag: {e}")
 
 
-def get_tags_from_plc():
+def get_tags_from_plc(plc):
     tag_list = {}
 
     try:
-        with open('tags.json', 'r') as f:
-            data = json.load(f)
+        data = plc.tags_json
 
         for tag_name, tag_info in data.items():
             tag_data_type = tag_info['data_type']
@@ -456,8 +460,6 @@ def write_tag(ip, tags, values, results, plc, **kwargs):
         bool: True if the write was successful, False otherwise.
     """
 
-    save_history(ip, tags)
-
     file_enabled = kwargs.get('file_enabled', False)
     file_selection = kwargs.get('file_selection', 0)
     if file_selection == 0:
@@ -493,23 +495,6 @@ def write_tag(ip, tags, values, results, plc, **kwargs):
         except Exception as e:
             print(f"Error in write_tag: {e}")
             return None
-
-
-def save_history(ip, tag):
-    """
-    Saves the IP address and tag to a file named 'plc_readwrite.pckl' using pickle.
-
-    Args:
-        ip (str): The IP address to be saved.
-        tag (str): The tag to be saved.
-
-    Returns:
-        None
-    """
-    if ip != '' and tag != '':
-        f = open('plc_readwrite.pckl', 'wb')
-        pickle.dump((ip, tag), f)
-        f.close()
 
 
 def plot_trend_data(tag, results, timestamps, single_tag):
@@ -904,12 +889,16 @@ class TableView(QTableWidget):
  
     def setData(self, data):
         row_count = self.rowCount()
-        self.setRowCount(row_count + 1)
+        length = len(data.keys())
 
-        for n, key in enumerate(sorted(data.keys())):
-            for m, item in enumerate(data[key]):
-                newitem = QTableWidgetItem(item)
-                self.setItem(m, n, newitem)
+        if length > row_count:
+            self.setRowCount(length)
+
+        for i, (tag, value) in enumerate(data.items()):
+            new_tag = QTableWidgetItem(tag)
+            new_value = QTableWidgetItem(value)
+            self.setItem(i, 0, new_tag)
+            self.setItem(i, 1, new_value)
         
 
 class MainWindow(QMainWindow):
@@ -929,6 +918,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super(MainWindow, self).__init__()
+
+        self.settings = QSettings("PM Development", "PLC Tag Utility")
         
         ipRegex = QRegularExpression(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
         tagRegex = QRegularExpression(r"^[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?(?:,\s*[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?)*$")
@@ -1095,6 +1086,7 @@ class MainWindow(QMainWindow):
         self.file_name = QLineEdit()
         self.file_browser = QPushButton("Browse")
         self.connect_button = QPushButton("Connect")
+        self.results_label = QLabel("Results")
         self.results = QPlainTextEdit()
         self.file_format_selection = QComboBox()
         self.file_format = 0
@@ -1123,19 +1115,15 @@ class MainWindow(QMainWindow):
         entry_layout.addLayout(selection_layout)
         entry_layout.addLayout(file_layout)
         entry_layout.addWidget(tabs)
+        results_layout.addWidget(self.results_label)
         results_layout.addWidget(self.results)
         
-        # --------------------------------------------#
-        # NEW TEST TABLE CODE
-                                 
-        self.add_to_table_button = QPushButton("Add To Table")
-        results_layout.addWidget(self.add_to_table_button)
-        
         self.data = {'Tag': [], 'Value': []}
+        self.tag_read_history = {}
         self.table = TableView(0, 2)
+        self.table_label = QLabel("Read History")
+        results_layout.addWidget(self.table_label)
         results_layout.addWidget(self.table)
-        
-        self.add_to_table_button.clicked.connect(lambda: self.add_to_table(self.data))
 
         # Add to main layout
         main_layout.addLayout(entry_layout)
@@ -1145,9 +1133,6 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         widget.setLayout(main_layout)
         self.setCentralWidget(widget)
-        
-        # END NEW TEST TABLE CODE
-        # --------------------------------------------#
 
         # --------------------------------------------#
         #               CONNECT EVENTS                #
@@ -1165,20 +1150,16 @@ class MainWindow(QMainWindow):
         self.file_browser.clicked.connect(lambda: self.file_name.setText(QFileDialog.getOpenFileName()[0]))
 
         # Load stored data if available
-        try:
-            f = open('plc_readwrite.pckl', 'rb')
-            data_stored = pickle.load(f)
-            f.close()
-            self.ip_input.setText(str(data_stored[0]))
-            self.tag_input.setText(str(data_stored[1]))
-        except FileNotFoundError:
-            pass
-        
+        self.ip_input.setText(self.settings.value('ip', ''))
+        self.tag_input.setText(self.settings.value('tag', ''))
+
+    def save_history(self):
+        self.settings.setValue('ip', self.ip_input.text())
+        self.settings.setValue('tag', self.tag_input.text())
+
     # --------------------------------------------#
     
     def add_to_table(self, data):
-        self.data['Tag'].append('New Tag')
-        self.data['Value'].append('New Value')
         
         self.table.setData(data)
         print(self.data)
@@ -1238,7 +1219,7 @@ class MainWindow(QMainWindow):
         
     def connect_button_clicked(self):
         if self.ip_input.hasAcceptableInput():
-            connect_to_plc(self.ip_input.text(), self)
+            connect_to_plc(self.ip_input.text(), self.connect_button, self)
         else:
             self.results.appendPlainText("IP address is invalid.")
     
@@ -1256,7 +1237,8 @@ class MainWindow(QMainWindow):
         # Check against dictionary
         for input_tag in input_tags:
             tag_components = input_tag.split('.')
-            if not any(all(tc == kc.split('.')[i] for i, tc in enumerate(tag_components) if i < len(kc.split('.'))) for kc in tag_types):
+            #if not any(all(tc == kc.split('.')[i] for i, tc in enumerate(input_tag) if i < len(kc.split('.'))) for kc in tag_types):
+            if input_tag not in tag_types:
                 return False
 
         return True
@@ -1266,10 +1248,11 @@ class MainWindow(QMainWindow):
         if check_plc_connection(plc, self):
             if self.tag_input.hasAcceptableInput():
                 if self.is_valid_tag_input(self.tag_input.text(), tag_types):
+                    self.save_history()
                     if self.file_name.text() != '':
-                        read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
+                        read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, self, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
                     else:
-                        read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
+                        read_tag(self.ip_input.text(), self.tag_input.text(), self.results, plc, self, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
                 else:
                     self.results.appendPlainText("Tag or tags do not exist in PLC.")
             else:
@@ -1280,8 +1263,9 @@ class MainWindow(QMainWindow):
 
     def write_tag_button_clicked(self):
         if check_plc_connection(plc, self):
-            if self.tagLineEdit.hasAcceptableInput():
+            if self.tag_input.hasAcceptableInput():
                 if self.is_valid_tag_input(self.tag_input.text(), tag_types):
+                    self.save_history()
                     if self.file_name.text() != '':
                         write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self.results, plc, file_enabled=self.file_enabled.isChecked(), file_name=self.file_file.text(), file_selection = self.file_format)
                     else:
@@ -1292,6 +1276,7 @@ class MainWindow(QMainWindow):
                 self.results.appendPlainText("Tag input is invalid.")
         else:
             self.showNotConnectedDialog()
+
 
     def print_resuts(self, results):
         self.results.appendPlainText(results)
@@ -1309,7 +1294,7 @@ class MainWindow(QMainWindow):
             self.trend_button.setText("Start Trend")
         else:
             if check_plc_connection(plc, self):
-                if self.tagLineEdit.hasAcceptableInput():
+                if self.tag_input.hasAcceptableInput():
                     if self.is_valid_tag_input(self.tag_input.text(), tag_types):
                         if not self.trend_thread.isRunning():
                             self.trender.ip = self.ip_input.text()
@@ -1333,7 +1318,7 @@ class MainWindow(QMainWindow):
             self.monitor_button.setText("Start Monitor")
         else:
             if check_plc_connection(plc, self):
-                if self.tagLineEdit.hasAcceptableInput():
+                if self.tag_input.hasAcceptableInput():
                     if self.is_valid_tag_input(self.tag_input.text(), tag_types):
                         if not self.monitor_thread.isRunning():
                             self.monitorer.ip = self.ip_input.text()
