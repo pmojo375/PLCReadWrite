@@ -22,6 +22,8 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QListWidget,
+    QListView,
 )
 from PySide6 import QtGui
 from PySide6.QtGui import QRegularExpressionValidator
@@ -899,7 +901,7 @@ class TableView(QTableWidget):
             new_value = QTableWidgetItem(value)
             self.setItem(i, 0, new_tag)
             self.setItem(i, 1, new_value)
-        
+
 
 class MainWindow(QMainWindow):
     def show_about_window(self):
@@ -986,12 +988,23 @@ class MainWindow(QMainWindow):
 
         # Create widgets
         self.read_button = QPushButton("Read")
+        self.read_List_button = QPushButton("Read Tags In List")
+        self.remove_tag_button = QPushButton("Remove Tag")
+        self.add_tag_button = QPushButton("Add Tag")
+        self.tags_to_read_list = QListView()
+        model = QtGui.QStandardItemModel()
 
         # Set parameters
+        self.remove_tag_button.setEnabled(False)
+        self.tags_to_read_list.setModel(model)
         self.read_button.setDisabled(True)
 
         # Add to layouts
         read_tab_layout.addWidget(self.read_button)
+        read_tab_layout.addWidget(self.tags_to_read_list)
+        read_tab_layout.addWidget(self.add_tag_button)
+        read_tab_layout.addWidget(self.remove_tag_button)
+        read_tab_layout.addWidget(self.read_List_button)
 
         
         # --------------------------------------------#
@@ -1135,6 +1148,42 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(widget)
 
         # --------------------------------------------#
+        #              MOUSE HOVER TIPS               #
+        # --------------------------------------------#
+
+        self.read_button.setToolTip("Reads the tag specified in the tag input field.")
+        self.write_button.setToolTip("Writes the value specified in the value input field to the tag specified in the tag input field.")
+        self.trend_button.setToolTip("Starts trending the tag specified in the tag input field.")
+        self.monitor_button.setToolTip("Starts monitoring the tag specified in the tag input field.")
+        self.ip_input.setToolTip("Enter the IP address of the PLC.")
+        self.tag_input.setToolTip("Enter the tag to read or write to.")
+        self.file_enabled.setToolTip("Enable reading and writing to a file.")
+        self.file_name.setToolTip("Enter the name of the file to read or write to.")
+        self.file_browser.setToolTip("Browse for a file to read or write to.")
+        self.connect_button.setToolTip("Connect or disconnect PLC connection.")
+        self.results.setToolTip("Displays the results of the last read or write operation and any user messages.")
+        self.read_List_button.setToolTip("Reads the tags in the list above.")
+        self.remove_tag_button.setToolTip("Removes the selected tag from the list.")
+        self.add_tag_button.setToolTip("Adds the tag in the tag input field to the list.")
+        self.trend_rate.setToolTip("Enter the interval between reads in seconds.")
+        self.trend_plot_button.setToolTip("Plots the trend data.")
+        self.monitor_value.setToolTip("Enter the value to monitor.")
+        self.monitor_rate.setToolTip("Enter the interval between reads in seconds.")
+        self.enable_event.setToolTip("Enable reading and writing on event.")
+        self.read_selected_radio.setToolTip("Reads the tags specified in the tags to read/write on event input field.")
+        self.write_selected_radio.setToolTip("Writes the values specified in the values to read/write on event input field to the tags specified in the tags to read/write on event input field.")
+        self.monitor_read_write_tags.setToolTip("Enter the tags to read/write on event.")
+        self.monitor_read_write_values.setToolTip("Enter the values to write on event.")
+        self.write_value.setToolTip("Enter the value to write to the tag.")
+        
+        self.setStyleSheet("""QToolTip { 
+                           background-color: black; 
+                           color: white; 
+                           border: black solid 1px;
+                           border-radius:10px;
+                           }""")
+
+        # --------------------------------------------#
         #               CONNECT EVENTS                #
         # --------------------------------------------#
 
@@ -1149,9 +1198,55 @@ class MainWindow(QMainWindow):
         self.connect_button.clicked.connect(self.connect_button_clicked)
         self.file_browser.clicked.connect(lambda: self.file_name.setText(QFileDialog.getOpenFileName()[0]))
 
+        self.tags_to_read_list.selectionModel().selectionChanged.connect(
+            self.handle_list_selection_changed
+        )
+        self.remove_tag_button.clicked.connect(self.remove_from_list)
+        self.add_tag_button.clicked.connect(self.add_to_list)
+        self.read_List_button.clicked.connect(self.read_tag_list_button_clicked)
+
         # Load stored data if available
         self.ip_input.setText(self.settings.value('ip', ''))
         self.tag_input.setText(self.settings.value('tag', ''))
+
+    def handle_list_selection_changed(self):
+        self.remove_tag_button.setEnabled(bool(self.tags_to_read_list.selectedIndexes()))
+
+    def remove_from_list(self):
+        for index in self.tags_to_read_list.selectedIndexes():
+            self.tags_to_read_list.model().removeRow(index.row())
+
+            # check if list is empty now
+            if self.tags_to_read_list.model().rowCount() == 0:
+                self.read_List_button.setEnabled(False)
+
+    def add_to_list(self):
+        if check_plc_connection(plc, self):
+            if self.tag_input.hasAcceptableInput():
+                if self.is_valid_tag_input(self.tag_input.text(), tag_types):
+                    # check if tag already in list
+                    if self.tag_input.text() not in [self.tags_to_read_list.model().item(i).text() for i in range(self.tags_to_read_list.model().rowCount())]:
+                        self.tags_to_read_list.model().appendRow(QtGui.QStandardItem(self.tag_input.text()))
+                        self.read_List_button.setEnabled(True)
+                else:
+                    self.results.appendPlainText("Tag or tags do not exist in PLC.")
+            else:
+                self.results.appendPlainText("Tag input is invalid.")
+        else:
+            self.showNotConnectedDialog()
+    
+    def get_from_list(self):
+        tags = ''
+        first_item = True
+        for index in range(self.tags_to_read_list.model().rowCount()):
+            if not first_item:
+                tags += ', '
+            else:
+                first_item = False
+
+            tags = tags + self.tags_to_read_list.model().item(index).text()
+
+        return tags
 
     def save_history(self):
         self.settings.setValue('ip', self.ip_input.text())
@@ -1257,6 +1352,20 @@ class MainWindow(QMainWindow):
                     self.results.appendPlainText("Tag or tags do not exist in PLC.")
             else:
                 self.results.appendPlainText("Tag input is invalid.")
+        else:
+            self.showNotConnectedDialog()
+
+
+    def read_tag_list_button_clicked(self):
+        if check_plc_connection(plc, self):
+            if self.is_valid_tag_input(self.get_from_list(), tag_types):
+                self.save_history()
+                if self.file_name.text() != '':
+                    read_tag(self.ip_input.text(), self.get_from_list(), self.results, plc, self, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
+                else:
+                    read_tag(self.ip_input.text(), self.get_from_list(), self.results, plc, self, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
+            else:
+                self.results.appendPlainText("Tag or tags do not exist in PLC.")
         else:
             self.showNotConnectedDialog()
 
