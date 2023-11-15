@@ -1052,6 +1052,7 @@ class MainWindow(QMainWindow):
         self.trend_rate.setSuffix(" seconds between reads")
         self.trend_rate.setSingleStep(0.1)
         self.trend_button.setDisabled(True)
+        self.trend_plot_button.setEnabled(False)
 
         # Add to layouts
         trend_tab_layout.addWidget(self.trend_rate)
@@ -1087,6 +1088,8 @@ class MainWindow(QMainWindow):
         self.monitor_rate.setSingleStep(0.1)
         self.monitor_value.setPlaceholderText("Value to Monitor")
         self.monitor_button.setDisabled(True)
+        self.read_selected_radio.setEnabled(False)
+        self.write_selected_radio.setEnabled(False)
 
         # Add to layouts
         self.monitor_radio_layout.addWidget(self.read_selected_radio)
@@ -1147,8 +1150,6 @@ class MainWindow(QMainWindow):
         results_layout.addWidget(self.results)
         results_layout.addWidget(self.table_label)
         results_layout.addWidget(self.table)
-
-
 
         self.tag_read_history = {}
 
@@ -1218,10 +1219,20 @@ class MainWindow(QMainWindow):
         self.remove_tag_button.clicked.connect(self.remove_from_list)
         self.add_tag_button.clicked.connect(self.add_to_list)
         self.read_List_button.clicked.connect(self.read_tag_list_button_clicked)
+        self.enable_event.stateChanged.connect(self.set_read_write_selection)
 
         # Load stored data if available
         self.ip_input.setText(self.settings.value('ip', ''))
         self.tag_input.setText(self.settings.value('tag', ''))
+
+
+    def set_read_write_selection(self):
+        if self.enable_event.isChecked():
+            self.read_selected_radio.setEnabled(True)
+            self.write_selected_radio.setEnabled(True)
+        else:
+            self.read_selected_radio.setEnabled(False)
+            self.write_selected_radio.setEnabled(False)
 
 
     def handle_list_selection_changed(self):
@@ -1429,6 +1440,7 @@ class MainWindow(QMainWindow):
                             self.trender.plc = plc
                             self.trender.running = True
                             self.trend_thread.start()
+                            self.trend_plot_button.setEnabled(True)
                             self.trend_button.setText("Stop Trend")
                     else:
                         self.print_results("Tag or tags do not exist in PLC.")
