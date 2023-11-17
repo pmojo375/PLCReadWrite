@@ -1224,6 +1224,7 @@ class MainWindow(QMainWindow):
         # Load stored data if available
         self.ip_input.setText(self.settings.value('ip', ''))
         self.tag_input.setText(self.settings.value('tag', ''))
+        self.populate_list_from_history()
 
 
     def set_read_write_selection(self):
@@ -1242,6 +1243,8 @@ class MainWindow(QMainWindow):
     def remove_from_list(self):
         for index in self.tags_to_read_list.selectedIndexes():
             self.tags_to_read_list.model().removeRow(index.row())
+            
+            self.settings.setValue('tag_list', self.get_from_list())
 
             # check if list is empty now
             if self.tags_to_read_list.model().rowCount() == 0:
@@ -1256,12 +1259,20 @@ class MainWindow(QMainWindow):
                     if self.tag_input.text() not in [self.tags_to_read_list.model().item(i).text() for i in range(self.tags_to_read_list.model().rowCount())]:
                         self.tags_to_read_list.model().appendRow(QtGui.QStandardItem(self.tag_input.text()))
                         self.read_List_button.setEnabled(True)
+                        self.settings.setValue('tag_list', self.get_from_list())
                 else:
                     self.print_results("Tag or tags do not exist in PLC.")
             else:
                 self.print_results("Tag input is invalid.")
         else:
             self.showNotConnectedDialog()
+
+    
+    def populate_list_from_history(self):
+        tags = self.settings.value('tag_list', '')
+        if tags != '':
+            for tag in tags.split(','):
+                self.tags_to_read_list.model().appendRow(QtGui.QStandardItem(tag))
     
 
     def get_from_list(self):
@@ -1280,6 +1291,7 @@ class MainWindow(QMainWindow):
     def save_history(self):
         self.settings.setValue('ip', self.ip_input.text())
         self.settings.setValue('tag', self.tag_input.text())
+        self.settings.setValue('tag_list', self.get_from_list())
 
     
     def add_to_table(self, data):
