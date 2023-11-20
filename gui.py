@@ -1203,6 +1203,7 @@ class MainWindow(QMainWindow):
 
         # Set parameters
         self.tag_input.setPlaceholderText("Tag")
+        self.file_name.setPlaceholderText("File Name")
         self.ip_input.setMaxLength(15)
         self.ip_input.setPlaceholderText("IP Address")
         self.results.setReadOnly(True)
@@ -1320,6 +1321,10 @@ class MainWindow(QMainWindow):
     def read_event_deselected(self):
         self.event_oneshot.setEnabled(False)
         self.event_timed.setEnabled(False)
+        self.event_radio_group.setExclusive(False)
+        self.event_oneshot.setChecked(False)
+        self.event_timed.setChecked(False)
+        self.event_radio_group.setExclusive(True)
 
     
     def monitor_read_set_time_selected(self):
@@ -1337,6 +1342,16 @@ class MainWindow(QMainWindow):
         else:
             self.read_selected_radio.setEnabled(False)
             self.write_selected_radio.setEnabled(False)
+            self.read_write_radio_group.setExclusive(False)
+            self.read_selected_radio.setChecked(False)
+            self.write_selected_radio.setChecked(False)
+            self.read_write_radio_group.setExclusive(True)
+            self.event_timed.setEnabled(False)
+            self.event_oneshot.setEnabled(False)
+            self.event_radio_group.setExclusive(False)
+            self.event_timed.setChecked(False)
+            self.event_oneshot.setChecked(False)
+            self.event_radio_group.setExclusive(True)
 
 
     def handle_list_selection_changed(self):
