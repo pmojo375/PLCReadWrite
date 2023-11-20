@@ -530,7 +530,7 @@ def plot_trend_data(tag, results, timestamps, single_tag):
         print('\n****** Cannot plot multiple tags yet ******\n')
 
 
-def process_trend_data(tag, results, timestamps, single_tag, yaml_enabled, yaml_file):
+def process_trend_data(tag, results, timestamps, single_tag, file_enabled, file_name, file_format):
     """
     Process trend data and write it to a YAML file if enabled.
 
@@ -545,9 +545,12 @@ def process_trend_data(tag, results, timestamps, single_tag, yaml_enabled, yaml_
     Returns:
         None
     """
-    if yaml_enabled:
-        if yaml_file == '':
-            yaml_file = f'{tag}_trend_results.yaml'
+    if file_enabled:
+        if file_name == '':
+            if file_format == 0:
+                file_name = f'{tag}_trend_results.yaml'
+            else:
+                file_name = f'{tag}_trend_results.csv'
 
         if type(results[0]) == dict:
             # get keys from first dict in list
@@ -556,34 +559,56 @@ def process_trend_data(tag, results, timestamps, single_tag, yaml_enabled, yaml_
         else:
             keys = ['Trend Duration', 'Value']
 
-        with open(yaml_file, 'w') as f:
+        with open(file_name, 'w') as f:
 
-            yaml_data = []
+            if file_format == 0:
 
-            if single_tag:
-                for i, val in enumerate(results):
-                    data = {}
+                yaml_data = []
 
-                    td = timestamps[i]
-                    data['Trend Duration'] = td
-                    data[tag.strip()] = val
+                if single_tag:
+                    for i, val in enumerate(results):
+                        data = {}
 
-                    yaml_data.append(data)
+                        td = timestamps[i]
+                        data['Trend Duration'] = td
+                        data[tag.strip()] = val
+
+                        yaml_data.append(data)
+                else:
+                    formatted_tag = [t.strip() for t in tag.split(',')]
+
+                    # loop through the length of the trend results
+                    for i in range(len(results[0])):
+                        data = {}
+                        td = timestamps[i]
+                        data['Trend Duration'] = td
+
+                        for y in range(len(results)):
+                                data[formatted_tag[y]] = results[y][i]
+
+                        yaml_data.append(data)                             
+
+                yaml.safe_dump(yaml_data, f, default_flow_style=False)
             else:
-                formatted_tag = [t.strip() for t in tag.split(',')]
+                writer = csv.DictWriter(f, fieldnames=keys, lineterminator = '\n')
+                writer.writeheader()
 
-                # loop through the length of the trend results
-                for i in range(len(results[0])):
-                    data = {}
-                    td = timestamps[i]
-                    data['Trend Duration'] = td
+                if single_tag:
+                    for i, val in enumerate(results):
+                        writer.writerow({'Trend Duration': timestamps[i], 'Value': val})
+                else:
+                    formatted_tag = [t.strip() for t in tag.split(',')]
 
-                    for y in range(len(results)):
-                            data[formatted_tag[y]] = results[y][i]
+                    # loop through the length of the trend results
+                    for i in range(len(results[0])):
+                        data = {}
+                        td = timestamps[i]
+                        data['Trend Duration'] = td
 
-                    yaml_data.append(data)                             
+                        for y in range(len(results)):
+                                data[formatted_tag[y]] = results[y][i]
 
-            yaml.safe_dump(yaml_data, f, default_flow_style=False)
+                        writer.writerow(data)
 
 
 def flatten_dict(d, parent_key='', sep='.'):
@@ -832,6 +857,7 @@ class Monitorer(QObject):
                         if self.first_event:
                             self.previous_timestamp = now
                             self.first_event = False
+                            yaml_temp['Time Since Last Event'] = ''
                         else:
                             time_since_last_event = (now - self.previous_timestamp).total_seconds() * 1000
                             self.update.emit(f'Time since last event: {time_since_last_event} ms')
@@ -966,8 +992,10 @@ class MainWindow(QMainWindow):
         
         ipRegex = QRegularExpression(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
         tagRegex = QRegularExpression(r"^[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?(?:,\s*[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?)*$")
+        fileRegex = r"^[a-zA-Z0-9_-]+(\.(csv|yaml))?$"
         ipValidator = QRegularExpressionValidator(ipRegex)
         tagValidator = QRegularExpressionValidator(tagRegex)
+        fileValidator = QRegularExpressionValidator(fileRegex)
         
         self.w = None
         self.setWindowTitle("PLC Read/Write")
@@ -1179,6 +1207,7 @@ class MainWindow(QMainWindow):
         self.ip_input.setPlaceholderText("IP Address")
         self.results.setReadOnly(True)
         self.file_format_selection.addItems(["YAML", "CSV"])
+        self.file_name.setValidator(fileValidator)
         self.file_format_selection.currentIndexChanged.connect(self.file_format_changed)
         self.ip_input.setValidator(ipValidator)
         self.ip_input.textChanged.connect(self.on_ip_text_changed)
@@ -1388,7 +1417,6 @@ class MainWindow(QMainWindow):
 
     def file_format_changed(self, i):
         self.file_format = i
-        print(i)
 
 
     def showNotConnectedDialog(self):
@@ -1450,6 +1478,18 @@ class MainWindow(QMainWindow):
                 return False
 
         return True
+    
+
+    def check_and_convert_file_name(self):
+        file_name = self.file_name.text()
+
+        if '.csv' not in file_name and '.yaml' not in file_name:
+            if self.file_format == 0:
+                file_name = file_name + '.yaml'
+            else:
+                file_name = file_name + '.csv'
+
+        return file_name
 
 
     def read_tag_button_clicked(self):
@@ -1458,7 +1498,8 @@ class MainWindow(QMainWindow):
                 if self.is_valid_tag_input(self.tag_input.text(), tag_types):
                     self.save_history()
                     if self.file_name.text() != '':
-                        read_tag(self.ip_input.text(), self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
+                        file_name = self.check_and_convert_file_name(self.file_name.text())
+                        read_tag(self.ip_input.text(), self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(), file_name=file_name, file_selection = self.file_format)
                     else:
                         read_tag(self.ip_input.text(), self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
                 else:
@@ -1474,7 +1515,8 @@ class MainWindow(QMainWindow):
             if self.is_valid_tag_input(self.get_from_list(), tag_types):
                 self.save_history()
                 if self.file_name.text() != '':
-                    read_tag(self.ip_input.text(), self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(), file_name=self.file_name.text(), file_selection = self.file_format)
+                    file_name = self.check_and_convert_file_name(self.file_name.text())
+                    read_tag(self.ip_input.text(), self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(), file_name=file_name, file_selection = self.file_format)
                 else:
                     read_tag(self.ip_input.text(), self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
             else:
@@ -1489,7 +1531,8 @@ class MainWindow(QMainWindow):
                 if self.is_valid_tag_input(self.tag_input.text(), tag_types):
                     self.save_history()
                     if self.file_name.text() != '':
-                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=self.file_file.text(), file_selection = self.file_format)
+                        file_name = self.check_and_convert_file_name(self.file_name.text())
+                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection = self.file_format)
                     else:
                         write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection = self.file_format)
                 else:
@@ -1512,7 +1555,11 @@ class MainWindow(QMainWindow):
 
     def trender_thread(self):
         if self.trender.running:
-            process_trend_data(self.trender.tags, self.trender.results, self.trender.timestamps, self.trender.single_tag, self.file_enabled.isChecked(), self.file_name.text())
+            if self.file_name.text() != '':
+                file_name = self.check_and_convert_file_name(self)
+            else:
+                file_name = ''
+            process_trend_data(self.trender.tags, self.trender.results, self.trender.timestamps, self.trender.single_tag, self.file_enabled.isChecked(), file_name, self.file_format_selection.currentIndex())
             self.trender.stop()
             self.trend_button.setText("Start Trend")
         else:
@@ -1521,7 +1568,7 @@ class MainWindow(QMainWindow):
                     if self.is_valid_tag_input(self.tag_input.text(), tag_types):
 
                         self.save_history()
-                        
+
                         if not self.trend_thread.isRunning():
                             self.trender.ip = self.ip_input.text()
                             self.trender.tags = self.tag_input.text()
@@ -1538,9 +1585,41 @@ class MainWindow(QMainWindow):
             else:
                 self.showNotConnectedDialog()
 
+    
+    def process_monitor_data(self, yaml_data):
+        if self.file_enabled.isChecked():
+            if self.file_name.text() != '':
+                file_name = self.check_and_convert_file_name(self)
+            else:
+                if self.file_format == 0:
+                    file_name = 'trend_data.yaml'
+                else:
+                    file_name = 'trend_data.csv'
+            
+            
+            with open(file_name, 'w') as f:
+
+                if self.file_format == 0:
+                    yaml.safe_dump(yaml_data, f, default_flow_style=False)
+                else:
+                    writer = csv.writer(f, lineterminator='\n')
+                    yaml_data_keys = yaml_data[0].keys()
+                    header = []
+                    for key in yaml_data_keys:
+                        header.append(key)
+                    writer.writerow(header)
+
+                    for data in yaml_data:
+                        row = []
+                        for value in data.values():
+                            row.append(value)
+
+                        writer.writerow(row)
+
 
     def monitorer_thread(self):
         if self.monitorer.running:
+            self.process_monitor_data(self.monitorer.yaml_data)
             self.monitorer.stop()
             self.monitor_button.setText("Start Monitor")
         else:
