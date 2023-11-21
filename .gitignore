@@ -2,3 +2,8 @@ plc_readwrite.pckl
 venv
 __pycache__
 tags.json
+build
+dist
+gui.spec
+*.csv
+*.yaml
