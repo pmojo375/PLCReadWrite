@@ -279,6 +279,7 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
     return_data = []
 
     try:
+        main_window.print_results(f'Reading Tags...\n')
         ret = plc.read(*tags)
 
         if store_to_file:
@@ -294,28 +295,33 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
 
         # loop through each tag in the list
         if len(tags) == 1:
-            entry_tag = tags[0]
-            value = ret.value
-            return_data.append(crawl_and_format(value, entry_tag, {}))
-            if isinstance(value, list):
-                for i, v in enumerate(value):
-                    main_window.add_to_tree({f'{ret.tag}[{i}]': v}, main_window.tree.invisibleRootItem())
-            else:
-                main_window.add_to_tree({ret.tag: value}, main_window.tree.invisibleRootItem())
-
-        else:
-            for i, tag in enumerate(tags):
-                entry_tag = tags[i]
-                value = ret[i].value
+            if ret.error is None:
+                entry_tag = tags[0]
+                value = ret.value
                 return_data.append(crawl_and_format(value, entry_tag, {}))
                 if isinstance(value, list):
                     for i, v in enumerate(value):
-                        main_window.add_to_tree({f'{tags[i]}[{i}]': v}, main_window.tree.invisibleRootItem())
+                        main_window.add_to_tree({f'{ret.tag}[{i}]': v}, main_window.tree.invisibleRootItem())
                 else:
-                    main_window.add_to_tree({tags[i]: value}, main_window.tree.invisibleRootItem())
+                    main_window.add_to_tree({ret.tag: value}, main_window.tree.invisibleRootItem())
+            else:
+                main_window.print_results(f"Error: {ret.error}")
+
+        else:
+            for i, tag in enumerate(tags):
+                if ret[i].error is None:
+                    entry_tag = tags[i]
+                    value = ret[i].value
+                    return_data.append(crawl_and_format(value, entry_tag, {}))
+                    if isinstance(value, list):
+                        for i, v in enumerate(value):
+                            main_window.add_to_tree({f'{tags[i]}[{i}]': v}, main_window.tree.invisibleRootItem())
+                    else:
+                        main_window.add_to_tree({tags[i]: value}, main_window.tree.invisibleRootItem())
+                else:
+                    main_window.print_results(f"Error: {ret[i].error}")
 
         for result in return_data:
-            main_window.print_results(f'Reading Tags...\n')
             for tag, value in result.items():
 
                 pattern = r'\{[^}]*\}'
@@ -1226,6 +1232,7 @@ class MainWindow(QMainWindow):
         self.results.setReadOnly(True)
         self.file_format_selection.addItems(["YAML", "CSV"])
         self.file_name.setValidator(fileValidator)
+        self.file_name.textChanged.connect(self.on_file_text_changed)
         self.file_format_selection.currentIndexChanged.connect(self.file_format_changed)
         self.ip_input.setValidator(ipValidator)
         self.ip_input.textChanged.connect(self.on_ip_text_changed)
@@ -1464,6 +1471,13 @@ class MainWindow(QMainWindow):
             self.ip_input.setStyleSheet("color: white;")
         else:
             self.ip_input.setStyleSheet("color: red;")
+
+
+    def on_file_text_changed(self, text):
+        if self.file_name.hasAcceptableInput():
+            self.file_name.setStyleSheet("color: white;")
+        else:
+            self.file_name.setStyleSheet("color: red;")
 
 
     def on_tag_text_changed(self, text):
@@ -1727,6 +1741,7 @@ app = QApplication(sys.argv)
 app.setWindowIcon(QtGui.QIcon('icon.ico'))
 qdarktheme.setup_theme()
 window = MainWindow()
+window.resize(1000, 600)
 window.show()
 
 app.exec()
