@@ -1400,18 +1400,48 @@ class MainWindow(QMainWindow):
         else:
             existing_keys = {}
 
-        for key, value in data.items():
-            if key in existing_keys:
-                item = existing_keys[key]
-                if isinstance(value, dict):
-                    self.add_to_tree(value, item)
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if key in existing_keys:
+                    item = existing_keys[key]
+                    if isinstance(value, dict):
+                        self.add_to_tree(value, item)
+                    else:
+                        item.setText(1, str(value))
                 else:
-                    item.setText(1, str(value))
-            else:
-                new_item = QTreeWidgetItem(
-                    parent, [key, '' if isinstance(value, dict) else str(value)])
+                    if isinstance(value, dict):
+                        new_item = QTreeWidgetItem(
+                            parent, [key, ''])
+                        self.add_to_tree(value, new_item)
+                    elif isinstance(value, list):
+                        for i, v in enumerate(value):
+                            if isinstance(v, dict):
+                                new_item = QTreeWidgetItem(
+                                    parent, [f'{key}[{i}]', ''])
+                                self.add_to_tree(v, new_item)
+                            else:
+                                new_item = QTreeWidgetItem(
+                                    parent, [f'{key}[{i}]', str(v)])
+                                self.add_to_tree(v, new_item)
+                    else:
+                        new_item = QTreeWidgetItem(parent, [key, str(value)])
+        if isinstance(data, list):
+            for i, value in enumerate(data):
                 if isinstance(value, dict):
+                    new_item = QTreeWidgetItem(parent, [f'{i}', ''])
                     self.add_to_tree(value, new_item)
+                elif isinstance(value, list):
+                    for j, v in enumerate(value):
+                        if isinstance(v, dict):
+                            new_item = QTreeWidgetItem(
+                                parent, [f'{i}[{j}]', ''])
+                            self.add_to_tree(v, new_item)
+                        else:
+                            new_item = QTreeWidgetItem(
+                                parent, [f'{i}[{j}]', str(v)])
+                            self.add_to_tree(v, new_item)
+                else:
+                    new_item = QTreeWidgetItem(parent, [f'{i}', str(value)])
 
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
