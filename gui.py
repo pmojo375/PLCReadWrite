@@ -25,6 +25,8 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListView,
     QButtonGroup,
+    QTreeWidget,
+    QTreeWidgetItem,
 )
 from PySide6 import QtGui
 from PySide6.QtGui import QRegularExpressionValidator
@@ -295,11 +297,22 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
             entry_tag = tags[0]
             value = ret.value
             return_data.append(crawl_and_format(value, entry_tag, {}))
+            if isinstance(value, list):
+                for i, v in enumerate(value):
+                    main_window.add_to_tree({f'{ret.tag}[{i}]': v}, main_window.tree.invisibleRootItem())
+            else:
+                main_window.add_to_tree({ret.tag: value}, main_window.tree.invisibleRootItem())
+
         else:
             for i, tag in enumerate(tags):
                 entry_tag = tags[i]
                 value = ret[i].value
                 return_data.append(crawl_and_format(value, entry_tag, {}))
+            if isinstance(value, list):
+                for i, v in enumerate(value):
+                    main_window.add_to_tree({f'{ret.tag}[{i}]': v}, main_window.tree.invisibleRootItem())
+            else:
+                main_window.add_to_tree({ret.tag: value}, main_window.tree.invisibleRootItem())
 
         for result in return_data:
             main_window.print_results(f'Reading Tags...\n')
@@ -996,6 +1009,10 @@ class MainWindow(QMainWindow):
         ipValidator = QRegularExpressionValidator(ipRegex)
         tagValidator = QRegularExpressionValidator(tagRegex)
         fileValidator = QRegularExpressionValidator(fileRegex)
+
+        self.tree = QTreeWidget()
+        self.tree.setColumnCount(2)
+        self.tree.setHeaderLabels(['Tag', 'Value'])
         
         self.w = None
         self.setWindowTitle("PLC Read/Write")
@@ -1230,7 +1247,8 @@ class MainWindow(QMainWindow):
         results_layout.addWidget(self.results_label)
         results_layout.addWidget(self.results)
         results_layout.addWidget(self.table_label)
-        results_layout.addWidget(self.table)
+        results_layout.addWidget(self.tree)    
+        #results_layout.addWidget(self.table)
 
         self.tag_read_history = {}
 
@@ -1311,6 +1329,32 @@ class MainWindow(QMainWindow):
         self.ip_input.setText(self.settings.value('ip', ''))
         self.tag_input.setText(self.settings.value('tag', ''))
         self.populate_list_from_history()
+
+        self.tree_data = {}
+
+    
+    def add_to_tree(self, data, parent):
+        if parent.childCount() > 0:
+            existing_keys = {parent.child(i).text(0): parent.child(i) for i in range(parent.childCount())}
+        else:
+            existing_keys = {}
+
+        for key, value in data.items():
+            if key in existing_keys:
+                item = existing_keys[key]
+                if isinstance(value, dict):
+                    self.add_to_tree(value, item)
+                else:
+                    item.setText(1, str(value))
+            else:
+                new_item = QTreeWidgetItem(parent, [key, '' if isinstance(value, dict) else str(value)])
+                if isinstance(value, dict):
+                    self.add_to_tree(value, new_item)
+
+        self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+                
+
     
 
     def read_event_selected(self):
