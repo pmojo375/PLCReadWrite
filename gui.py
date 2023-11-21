@@ -308,11 +308,11 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
                 entry_tag = tags[i]
                 value = ret[i].value
                 return_data.append(crawl_and_format(value, entry_tag, {}))
-            if isinstance(value, list):
-                for i, v in enumerate(value):
-                    main_window.add_to_tree({f'{ret.tag}[{i}]': v}, main_window.tree.invisibleRootItem())
-            else:
-                main_window.add_to_tree({ret.tag: value}, main_window.tree.invisibleRootItem())
+                if isinstance(value, list):
+                    for i, v in enumerate(value):
+                        main_window.add_to_tree({f'{tags[i]}[{i}]': v}, main_window.tree.invisibleRootItem())
+                else:
+                    main_window.add_to_tree({tags[i]: value}, main_window.tree.invisibleRootItem())
 
         for result in return_data:
             main_window.print_results(f'Reading Tags...\n')
@@ -1353,9 +1353,7 @@ class MainWindow(QMainWindow):
 
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
-                
 
-    
 
     def read_event_selected(self):
         self.event_oneshot.setEnabled(True)
@@ -1434,6 +1432,7 @@ class MainWindow(QMainWindow):
         tags = self.settings.value('tag_list', '')
         if tags != '':
             for tag in tags.split(','):
+                tag = tag.strip()
                 self.tags_to_read_list.model().appendRow(QtGui.QStandardItem(tag))
     
 
@@ -1446,7 +1445,7 @@ class MainWindow(QMainWindow):
             else:
                 first_item = False
 
-            tags = tags + self.tags_to_read_list.model().item(index).text()
+            tags = tags + self.tags_to_read_list.model().item(index).text().strip()
 
         return tags
 
@@ -1557,7 +1556,7 @@ class MainWindow(QMainWindow):
                 if self.is_valid_tag_input(self.tag_input.text(), tag_types):
                     self.save_history()
                     if self.file_name.text() != '':
-                        file_name = self.check_and_convert_file_name(self.file_name.text())
+                        file_name = self.check_and_convert_file_name()
                         read_tag(self.ip_input.text(), self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(), file_name=file_name, file_selection = self.file_format)
                     else:
                         read_tag(self.ip_input.text(), self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
@@ -1574,7 +1573,7 @@ class MainWindow(QMainWindow):
             if self.is_valid_tag_input(self.get_from_list(), tag_types):
                 self.save_history()
                 if self.file_name.text() != '':
-                    file_name = self.check_and_convert_file_name(self.file_name.text())
+                    file_name = self.check_and_convert_file_name()
                     read_tag(self.ip_input.text(), self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(), file_name=file_name, file_selection = self.file_format)
                 else:
                     read_tag(self.ip_input.text(), self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
@@ -1590,7 +1589,7 @@ class MainWindow(QMainWindow):
                 if self.is_valid_tag_input(self.tag_input.text(), tag_types):
                     self.save_history()
                     if self.file_name.text() != '':
-                        file_name = self.check_and_convert_file_name(self.file_name.text())
+                        file_name = self.check_and_convert_file_name()
                         write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection = self.file_format)
                     else:
                         write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection = self.file_format)
@@ -1615,7 +1614,7 @@ class MainWindow(QMainWindow):
     def trender_thread(self):
         if self.trender.running:
             if self.file_name.text() != '':
-                file_name = self.check_and_convert_file_name(self)
+                file_name = self.check_and_convert_file_name()
             else:
                 file_name = ''
             process_trend_data(self.trender.tags, self.trender.results, self.trender.timestamps, self.trender.single_tag, self.file_enabled.isChecked(), file_name, self.file_format_selection.currentIndex())
@@ -1648,7 +1647,7 @@ class MainWindow(QMainWindow):
     def process_monitor_data(self, yaml_data):
         if self.file_enabled.isChecked():
             if self.file_name.text() != '':
-                file_name = self.check_and_convert_file_name(self)
+                file_name = self.check_and_convert_file_name()
             else:
                 if self.file_format == 0:
                     file_name = 'trend_data.yaml'
