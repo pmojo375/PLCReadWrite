@@ -1,5 +1,7 @@
 import sys
-from pycomm3 import LogixDriver
+
+#from pycomm3 import LogixDriver
+from offline_read import LogixDriver
 import qdarktheme
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QRegularExpression, QSettings
 from PySide6.QtWidgets import (
@@ -36,6 +38,8 @@ import re
 import datetime
 import matplotlib.pyplot as plt
 import csv
+
+
 
 tag_types = None
 tag_dimensions = None
