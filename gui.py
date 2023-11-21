@@ -1,6 +1,5 @@
 import sys
-
-#from pycomm3 import LogixDriver
+# from pycomm3 import LogixDriver
 from offline_read import LogixDriver
 import qdarktheme
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QRegularExpression, QSettings
@@ -24,7 +23,6 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
-    QListWidget,
     QListView,
     QButtonGroup,
     QTreeWidget,
@@ -33,17 +31,15 @@ from PySide6.QtWidgets import (
 from PySide6 import QtGui
 from PySide6.QtGui import QRegularExpressionValidator
 import yaml
-import pickle
 import re
 import datetime
 import matplotlib.pyplot as plt
 import csv
 
-
-
 tag_types = None
 tag_dimensions = None
 plc = None
+
 
 def connect_to_plc(ip, connect_button, main_window):
     """
@@ -101,7 +97,7 @@ def check_plc_connection(plc, main_window):
             main_window.stop_plc_connection_check()
             return False
     return False
-                
+
 
 def serialize_to_yaml(data, **kwargs):
     """
@@ -136,7 +132,7 @@ def data_to_dict(data):
             else:
                 processed_data.append({tag.tag: tag.value})
     else:
-        processed_data.append({tag.tag: tag.value})    
+        processed_data.append({tag.tag: tag.value})
 
     return processed_data
 
@@ -144,10 +140,10 @@ def data_to_dict(data):
 def deserialize_from_yaml(yaml_name):
     """
     Deserialize data from a YAML file and return a list of dictionaries containing tag-value pairs.
-    
+
     Args:
     - yaml_name (str): The name of the YAML file to deserialize.
-    
+
     Returns:
     - tag_values (list of dict): A list of dictionaries containing tag-value pairs.
     """
@@ -157,7 +153,7 @@ def deserialize_from_yaml(yaml_name):
         for item in yaml_data:
             for key, value in item.items():
                 tag_values.append({'tag': key, 'value': value})
-    
+
     return tag_values
 
 
@@ -178,10 +174,10 @@ def iterate_value(name, value, ret):
             iterate_value(f'{name}[{i}]', value, ret)
     elif type(value) == dict:
         for key, value in value.items():
-            iterate_value(f'{name}.{key}', value,ret)
+            iterate_value(f'{name}.{key}', value, ret)
     else:
         ret.append((name, value))
-    
+
     return ret
 
 
@@ -200,7 +196,7 @@ def process_yaml_read(data):
 
     for tag in data:
         tag_name = tag['tag']
-        tag_value  = tag['value']
+        tag_value = tag['value']
 
         processed_data = iterate_value(tag_name, tag_value, processed_data)
 
@@ -221,7 +217,8 @@ def process_csv_read(csv_file):
         reader = csv.DictReader(f)
         processed_data = []
         for row in reader:
-            processed_data.append((row['tag'], set_data_type(row['value'], row['tag'])))
+            processed_data.append(
+                (row['tag'], set_data_type(row['value'], row['tag'])))
     return processed_data
 
 
@@ -271,7 +268,7 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
     """
 
     tags = [t.strip() for t in tags.split(',')]
-        
+
     store_to_file = kwargs.get('store_to_file', False)
     file_selection = kwargs.get('file_selection', 0)
 
@@ -289,7 +286,7 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
         if store_to_file:
             if not isinstance(ret, list):
                 ret = [ret]
-            
+
             if file_selection == 0:
                 serialize_to_yaml(ret, yaml_file=file_name)
             elif file_selection == 1:
@@ -305,9 +302,11 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
                 return_data.append(crawl_and_format(value, entry_tag, {}))
                 if isinstance(value, list):
                     for i, v in enumerate(value):
-                        main_window.add_to_tree({f'{ret.tag}[{i}]': v}, main_window.tree.invisibleRootItem())
+                        main_window.add_to_tree(
+                            {f'{ret.tag}[{i}]': v}, main_window.tree.invisibleRootItem())
                 else:
-                    main_window.add_to_tree({ret.tag: value}, main_window.tree.invisibleRootItem())
+                    main_window.add_to_tree(
+                        {ret.tag: value}, main_window.tree.invisibleRootItem())
             else:
                 main_window.print_results(f"Error: {ret.error}")
 
@@ -319,9 +318,11 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
                     return_data.append(crawl_and_format(value, entry_tag, {}))
                     if isinstance(value, list):
                         for i, v in enumerate(value):
-                            main_window.add_to_tree({f'{tags[i]}[{i}]': v}, main_window.tree.invisibleRootItem())
+                            main_window.add_to_tree(
+                                {f'{tags[i]}[{i}]': v}, main_window.tree.invisibleRootItem())
                     else:
-                        main_window.add_to_tree({tags[i]: value}, main_window.tree.invisibleRootItem())
+                        main_window.add_to_tree(
+                            {tags[i]: value}, main_window.tree.invisibleRootItem())
                 else:
                     main_window.print_results(f"Error: {ret[i].error}")
 
@@ -334,7 +335,7 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
 
                 main_window.print_results(f"{tag} = {value}")
                 main_window.tag_read_history[tag] = value
-        
+
         main_window.print_results(f'')
         main_window.add_to_table(main_window.tag_read_history)
     except Exception as e:
@@ -364,13 +365,15 @@ def get_tags_from_plc(plc):
                     'structure': True
                 }
                 # Recursively store children
-                tag_list = extract_child_data_types(tag_data_type['internal_tags'], tag_list, tag_name, tag_dimensions)
+                tag_list = extract_child_data_types(
+                    tag_data_type['internal_tags'], tag_list, tag_name, tag_dimensions)
 
         return tag_list
     except Exception as e:
         print(f"Error in get_tags_from_plc function: {e}")
         return None
-    
+
+
 def extract_child_data_types(structure, array, name, parent_dimensions):
     for child_name, child_info in structure.items():
         child_data_type = child_info['data_type']
@@ -393,7 +396,8 @@ def extract_child_data_types(structure, array, name, parent_dimensions):
                 'structure': True
             }
             # Recursively store children
-            array = extract_child_data_types(child_data_type['internal_tags'], array, full_tag_name, parent_dimensions)
+            array = extract_child_data_types(
+                child_data_type['internal_tags'], array, full_tag_name, parent_dimensions)
 
     return array
 
@@ -607,18 +611,20 @@ def process_trend_data(tag, results, timestamps, single_tag, file_enabled, file_
                         data['Trend Duration'] = td
 
                         for y in range(len(results)):
-                                data[formatted_tag[y]] = results[y][i]
+                            data[formatted_tag[y]] = results[y][i]
 
-                        yaml_data.append(data)                             
+                        yaml_data.append(data)
 
                 yaml.safe_dump(yaml_data, f, default_flow_style=False)
             else:
-                writer = csv.DictWriter(f, fieldnames=keys, lineterminator = '\n')
+                writer = csv.DictWriter(
+                    f, fieldnames=keys, lineterminator='\n')
                 writer.writeheader()
 
                 if single_tag:
                     for i, val in enumerate(results):
-                        writer.writerow({'Trend Duration': timestamps[i], 'Value': val})
+                        writer.writerow(
+                            {'Trend Duration': timestamps[i], 'Value': val})
                 else:
                     formatted_tag = [t.strip() for t in tag.split(',')]
 
@@ -629,7 +635,7 @@ def process_trend_data(tag, results, timestamps, single_tag, file_enabled, file_
                         data['Trend Duration'] = td
 
                         for y in range(len(results)):
-                                data[formatted_tag[y]] = results[y][i]
+                            data[formatted_tag[y]] = results[y][i]
 
                         writer.writerow(data)
 
@@ -736,33 +742,37 @@ class Trender(QObject):
 
                         for i in range(len(result)):
                             self.results.append([])
-                    
+
                     self.first_pass = False
-                    
-                self.update.emit(f'\nTimestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+
+                self.update.emit(
+                    f'\nTimestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
 
                 if self.single_tag:
-                    self.update.emit(f'{formatted_tags[0]} = {result[0].value}')
+                    self.update.emit(
+                        f'{formatted_tags[0]} = {result[0].value}')
                     self.results.append(result[0].value)
                 else:
-                    for i, r in enumerate(result):            
+                    for i, r in enumerate(result):
                         self.update.emit(f'{formatted_tags[i]} = {r.value}')
                         self.results[i].append(r.value)
-                
-                self.timestamps.append((datetime.datetime.now() - start_time).total_seconds() * 1000)
+
+                self.timestamps.append(
+                    (datetime.datetime.now() - start_time).total_seconds() * 1000)
 
                 self.update_trend_data.emit(self.results, self.timestamps)
             except Exception as e:
                 print(f"Error in Trender: {e}")
-            
+
             QThread.msleep(self.interval)
-    
+
     def stop(self):
         """
         A method to stop the thread.
         """
         self.running = False
         self.finished.emit()
+
 
 class Monitorer(QObject):
     """
@@ -832,7 +842,8 @@ class Monitorer(QObject):
         self.read_loop_enabled = False
 
         if self.tags_to_read_write != None:
-            self.read_write_tag_list = [t.strip() for t in self.tags_to_read_write.split(',')]
+            self.read_write_tag_list = [
+                t.strip() for t in self.tags_to_read_write.split(',')]
 
         self.update.emit('Starting Monitor...')
 
@@ -841,23 +852,29 @@ class Monitorer(QObject):
             if self.read_loop_enabled:
                 self.read_time_timestamp = datetime.datetime.now()
 
-                read_total_time = (self.read_time_timestamp - self.read_time_timestamp_start).total_seconds()
+                read_total_time = (self.read_time_timestamp -
+                                   self.read_time_timestamp_start).total_seconds()
 
                 if read_total_time <= self.read_time:
                     try:
-                        read_event_results = plc.read(*self.read_write_tag_list)
+                        read_event_results = plc.read(
+                            *self.read_write_tag_list)
 
                         # if there were muliple tags in the read event
                         if type(read_event_results) is list:
                             for i, tag_result in enumerate(read_event_results):
-                                yaml_temp[self.read_write_tag_list[i]] = tag_result.value
-                                self.update.emit(f'{self.read_write_tag_list[i]} = {tag_result.value}')
+                                yaml_temp[self.read_write_tag_list[i]
+                                          ] = tag_result.value
+                                self.update.emit(
+                                    f'{self.read_write_tag_list[i]} = {tag_result.value}')
                         else:
-                            yaml_temp[self.read_write_tag_list[0]] = read_event_results.value
-                            self.update.emit(f'{self.read_write_tag_list[0]} = {read_event_results.value}')
-                        
+                            yaml_temp[self.read_write_tag_list[0]
+                                      ] = read_event_results.value
+                            self.update.emit(
+                                f'{self.read_write_tag_list[0]} = {read_event_results.value}')
+
                         self.yaml_data.append(yaml_temp)
-                        
+
                     except Exception as e:
                         print(f"Error in monitorer: {e}")
                 else:
@@ -873,7 +890,8 @@ class Monitorer(QObject):
                         timestamp = datetime.datetime.now().strftime("%I:%M:%S:%f %p")
                         now = datetime.datetime.now()
 
-                        self.update.emit(f'\nTag = {self.value} at Timestamp: {timestamp}')
+                        self.update.emit(
+                            f'\nTag = {self.value} at Timestamp: {timestamp}')
 
                         yaml_temp['Timestamp'] = timestamp
 
@@ -882,24 +900,31 @@ class Monitorer(QObject):
                             self.first_event = False
                             yaml_temp['Time Since Last Event'] = ''
                         else:
-                            time_since_last_event = (now - self.previous_timestamp).total_seconds() * 1000
-                            self.update.emit(f'Time since last event: {time_since_last_event} ms')
+                            time_since_last_event = (
+                                now - self.previous_timestamp).total_seconds() * 1000
+                            self.update.emit(
+                                f'Time since last event: {time_since_last_event} ms')
                             self.previous_timestamp = now
 
                             yaml_temp['Time Since Last Event'] = time_since_last_event
 
                         if self.read_write_tag_list != None and self.read_selected:
-                            read_event_results = plc.read(*self.read_write_tag_list)
+                            read_event_results = plc.read(
+                                *self.read_write_tag_list)
 
                             # if there were muliple tags in the read event
                             if type(read_event_results) is list:
                                 for i, tag_result in enumerate(read_event_results):
-                                    yaml_temp[self.read_write_tag_list[i]] = tag_result.value
-                                    self.update.emit(f'{self.read_write_tag_list[i]} = {tag_result.value}')
+                                    yaml_temp[self.read_write_tag_list[i]
+                                              ] = tag_result.value
+                                    self.update.emit(
+                                        f'{self.read_write_tag_list[i]} = {tag_result.value}')
                             else:
-                                yaml_temp[self.read_write_tag_list[0]] = read_event_results.value
-                                self.update.emit(f'{self.read_write_tag_list[0]} = {read_event_results.value}')
-                            
+                                yaml_temp[self.read_write_tag_list[0]
+                                          ] = read_event_results.value
+                                self.update.emit(
+                                    f'{self.read_write_tag_list[0]} = {read_event_results.value}')
+
                             if not self.read_once:
                                 self.read_loop_enabled = True
                                 self.read_time_timestamp_start = datetime.datetime.now()
@@ -909,21 +934,23 @@ class Monitorer(QObject):
                             tag_write_data = []
 
                             for i, value in enumerate([t.strip() for t in self.values_to_write.split(',')]):
-                                tag_write_data.append((self.read_write_tag_list[i], set_data_type(value, self.tags_to_read_write[i])))
-                                
+                                tag_write_data.append(
+                                    (self.read_write_tag_list[i], set_data_type(value, self.tags_to_read_write[i])))
+
                             self.plc.write(*tag_write_data)
-                            self.update.emit(f'Successfully wrote to tags: {self.tags_to_read_write}')
-                            
+                            self.update.emit(
+                                f'Successfully wrote to tags: {self.tags_to_read_write}')
+
                         self.yaml_data.append(yaml_temp)
-                    
+
                     if result.value != self.value:
                         self.hold = False
-                        
+
                 except Exception as e:
                     print(f"Error in monitorer: {e}")
-            
+
             QThread.msleep(self.interval)
-    
+
     def stop(self):
         """
         Stops the monitoring process.
@@ -937,6 +964,7 @@ class AboutWindow(QWidget):
     This "window" is a QWidget. If it has no parent, it
     will appear as a free-floating window as we want.
     """
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("About")
@@ -944,9 +972,11 @@ class AboutWindow(QWidget):
         self.name_label = QLabel("PLC Tag Utility")
         self.version_label = QLabel("Version 1.0")
         self.author_label = QLabel("Created by: Parker Mojsiejenko")
-        self.description_label = QLabel("This project is a utility for reading and writing tags from Allen-Bradley PLCs. It can read and write from YAML files as well a convert the read file to CSV if desired. In addition to that it can trend tags and monitor tags for changes and write to them when they change.")
+        self.description_label = QLabel(
+            "This project is a utility for reading and writing tags from Allen-Bradley PLCs. It can read and write from YAML files as well a convert the read file to CSV if desired. In addition to that it can trend tags and monitor tags for changes and write to them when they change.")
         self.description_label.setWordWrap(True)
-        self.about_label = QLabel("This project relies on the pycomm3 library made by ottowayi for communicating with Allen-Bradley PLCs.")
+        self.about_label = QLabel(
+            "This project relies on the pycomm3 library made by ottowayi for communicating with Allen-Bradley PLCs.")
         self.name_label.setAlignment(Qt.AlignCenter)
         self.version_label.setAlignment(Qt.AlignCenter)
         self.author_label.setAlignment(Qt.AlignCenter)
@@ -959,7 +989,7 @@ class AboutWindow(QWidget):
         layout.addWidget(self.about_label)
         layout.addWidget(self.description_label)
         self.setLayout(layout)
-        
+
 
 # Custom table widget for displaying tag-value pairs
 class TableView(QTableWidget):
@@ -967,11 +997,11 @@ class TableView(QTableWidget):
         QTableWidget.__init__(self, *args)
         self.setHorizontalHeaderLabels(['Tag', 'Value'])
         self.resizeRowsToContents()
-        
+
         # Set columns to automatically resize and fill the widget
         self.header = self.horizontalHeader()
         self.header.setSectionResizeMode(QHeaderView.Stretch)
- 
+
     def setData(self, data):
         row_count = self.rowCount()
         length = len(data.keys())
@@ -982,13 +1012,12 @@ class TableView(QTableWidget):
         for i, (tag, value) in enumerate(data.items()):
             new_tag = QTableWidgetItem(tag)
             new_value = QTableWidgetItem(value)
-            
+
             new_tag.setFlags(new_tag.flags() ^ Qt.ItemIsEditable)
             new_value.setFlags(new_value.flags() ^ Qt.ItemIsEditable)
             self.setItem(i, 0, new_tag)
             self.setItem(i, 1, new_value)
-        
-               
+
         self.header.setSectionResizeMode(0, QHeaderView.Stretch)
         self.header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
 
@@ -1012,9 +1041,11 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
 
         self.settings = QSettings("PM Development", "PLC Tag Utility")
-        
-        ipRegex = QRegularExpression(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
-        tagRegex = QRegularExpression(r"^[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?(?:,\s*[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?)*$")
+
+        ipRegex = QRegularExpression(
+            r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
+        tagRegex = QRegularExpression(
+            r"^[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?(?:,\s*[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?)*(?:\{\d+\})?)*$")
         fileRegex = r"^[a-zA-Z0-9_-]+(\.(csv|yaml))?$"
         ipValidator = QRegularExpressionValidator(ipRegex)
         tagValidator = QRegularExpressionValidator(tagRegex)
@@ -1023,7 +1054,7 @@ class MainWindow(QMainWindow):
         self.tree = QTreeWidget()
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels(['Tag', 'Value'])
-        
+
         self.w = None
         self.setWindowTitle("PLC Read/Write")
 
@@ -1036,7 +1067,8 @@ class MainWindow(QMainWindow):
 
         # Create timer for checking PLC connection
         self.plc_connection_check_timer = QTimer()
-        self.plc_connection_check_timer.timeout.connect(lambda: check_plc_connection(plc, self))
+        self.plc_connection_check_timer.timeout.connect(
+            lambda: check_plc_connection(plc, self))
 
         # Trender thread and signals
         self.trender = Trender()
@@ -1107,7 +1139,6 @@ class MainWindow(QMainWindow):
         read_tab_layout.addWidget(self.remove_tag_button)
         read_tab_layout.addWidget(self.read_List_button)
 
-        
         # --------------------------------------------#
         #                  WRITE TAB                  #
         # --------------------------------------------#
@@ -1123,7 +1154,6 @@ class MainWindow(QMainWindow):
         # Add to layouts
         write_tab_layout.addWidget(self.write_value)
         write_tab_layout.addWidget(self.write_button)
-
 
         # --------------------------------------------#
         #                  TREND TAB                  #
@@ -1162,14 +1192,16 @@ class MainWindow(QMainWindow):
         self.monitor_value = QLineEdit()
         self.monitor_rate = QDoubleSpinBox()
         self.enable_event = QCheckBox("Enable Read/Write On Event")
-        self.read_selected_radio  = QRadioButton("Read On Event")
-        self.write_selected_radio  = QRadioButton("Write On Event")
+        self.read_selected_radio = QRadioButton("Read On Event")
+        self.write_selected_radio = QRadioButton("Write On Event")
         self.monitor_read_write_tags = QLineEdit()
-        self.monitor_read_write_tags.setPlaceholderText("Tags to Read/Write On Event")
+        self.monitor_read_write_tags.setPlaceholderText(
+            "Tags to Read/Write On Event")
         self.monitor_read_write_values = QLineEdit()
-        self.monitor_read_write_values.setPlaceholderText("Values to Write On Event")
-        self.event_oneshot  = QRadioButton("Read Once")
-        self.event_timed  = QRadioButton("Read For Set Time")
+        self.monitor_read_write_values.setPlaceholderText(
+            "Values to Write On Event")
+        self.event_oneshot = QRadioButton("Read Once")
+        self.event_timed = QRadioButton("Read For Set Time")
         self.event_time = QDoubleSpinBox()
         self.read_write_radio_group = QButtonGroup()
         self.event_radio_group = QButtonGroup()
@@ -1237,7 +1269,8 @@ class MainWindow(QMainWindow):
         self.file_format_selection.addItems(["YAML", "CSV"])
         self.file_name.setValidator(fileValidator)
         self.file_name.textChanged.connect(self.on_file_text_changed)
-        self.file_format_selection.currentIndexChanged.connect(self.file_format_changed)
+        self.file_format_selection.currentIndexChanged.connect(
+            self.file_format_changed)
         self.ip_input.setValidator(ipValidator)
         self.ip_input.textChanged.connect(self.on_ip_text_changed)
         self.tag_input.setValidator(tagValidator)
@@ -1258,8 +1291,8 @@ class MainWindow(QMainWindow):
         results_layout.addWidget(self.results_label)
         results_layout.addWidget(self.results)
         results_layout.addWidget(self.table_label)
-        results_layout.addWidget(self.tree)    
-        #results_layout.addWidget(self.table)
+        results_layout.addWidget(self.tree)
+        # results_layout.addWidget(self.table)
 
         self.tag_read_history = {}
 
@@ -1276,31 +1309,45 @@ class MainWindow(QMainWindow):
         #              MOUSE HOVER TIPS               #
         # --------------------------------------------#
 
-        self.read_button.setToolTip("Reads the tag specified in the tag input field.")
-        self.write_button.setToolTip("Writes the value specified in the value input field to the tag specified in the tag input field.")
-        self.trend_button.setToolTip("Starts trending the tag specified in the tag input field.")
-        self.monitor_button.setToolTip("Starts monitoring the tag specified in the tag input field.")
+        self.read_button.setToolTip(
+            "Reads the tag specified in the tag input field.")
+        self.write_button.setToolTip(
+            "Writes the value specified in the value input field to the tag specified in the tag input field.")
+        self.trend_button.setToolTip(
+            "Starts trending the tag specified in the tag input field.")
+        self.monitor_button.setToolTip(
+            "Starts monitoring the tag specified in the tag input field.")
         self.ip_input.setToolTip("Enter the IP address of the PLC.")
         self.tag_input.setToolTip("Enter the tag to read or write to.")
         self.file_enabled.setToolTip("Enable reading and writing to a file.")
-        self.file_name.setToolTip("Enter the name of the file to read or write to.")
+        self.file_name.setToolTip(
+            "Enter the name of the file to read or write to.")
         self.file_browser.setToolTip("Browse for a file to read or write to.")
         self.connect_button.setToolTip("Connect or disconnect PLC connection.")
-        self.results.setToolTip("Displays the results of the last read or write operation and any user messages.")
+        self.results.setToolTip(
+            "Displays the results of the last read or write operation and any user messages.")
         self.read_List_button.setToolTip("Reads the tags in the list above.")
-        self.remove_tag_button.setToolTip("Removes the selected tag from the list.")
-        self.add_tag_button.setToolTip("Adds the tag in the tag input field to the list.")
-        self.trend_rate.setToolTip("Enter the interval between reads in seconds.")
+        self.remove_tag_button.setToolTip(
+            "Removes the selected tag from the list.")
+        self.add_tag_button.setToolTip(
+            "Adds the tag in the tag input field to the list.")
+        self.trend_rate.setToolTip(
+            "Enter the interval between reads in seconds.")
         self.trend_plot_button.setToolTip("Plots the trend data.")
         self.monitor_value.setToolTip("Enter the value to monitor.")
-        self.monitor_rate.setToolTip("Enter the interval between reads in seconds.")
+        self.monitor_rate.setToolTip(
+            "Enter the interval between reads in seconds.")
         self.enable_event.setToolTip("Enable reading and writing on event.")
-        self.read_selected_radio.setToolTip("Reads the tags specified in the tags to read/write on event input field.")
-        self.write_selected_radio.setToolTip("Writes the values specified in the values to read/write on event input field to the tags specified in the tags to read/write on event input field.")
-        self.monitor_read_write_tags.setToolTip("Enter the tags to read/write on event.")
-        self.monitor_read_write_values.setToolTip("Enter the values to write on event.")
+        self.read_selected_radio.setToolTip(
+            "Reads the tags specified in the tags to read/write on event input field.")
+        self.write_selected_radio.setToolTip(
+            "Writes the values specified in the values to read/write on event input field to the tags specified in the tags to read/write on event input field.")
+        self.monitor_read_write_tags.setToolTip(
+            "Enter the tags to read/write on event.")
+        self.monitor_read_write_values.setToolTip(
+            "Enter the values to write on event.")
         self.write_value.setToolTip("Enter the value to write to the tag.")
-        
+
         self.setStyleSheet("""QToolTip { 
                            background-color: black; 
                            color: white; 
@@ -1314,21 +1361,24 @@ class MainWindow(QMainWindow):
 
         # Connect read button to read_tag function
         self.read_button.clicked.connect(self.read_tag_button_clicked)
-        
+
         self.write_button.clicked.connect(self.write_tag_button_clicked)
 
         self.trend_button.clicked.connect(self.trender_thread)
-        self.trend_plot_button.clicked.connect(lambda: plot_trend_data(self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
+        self.trend_plot_button.clicked.connect(lambda: plot_trend_data(
+            self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
         self.monitor_button.clicked.connect(self.monitorer_thread)
         self.connect_button.clicked.connect(self.connect_button_clicked)
-        self.file_browser.clicked.connect(lambda: self.file_name.setText(QFileDialog.getOpenFileName()[0]))
+        self.file_browser.clicked.connect(
+            lambda: self.file_name.setText(QFileDialog.getOpenFileName()[0]))
 
         self.tags_to_read_list.selectionModel().selectionChanged.connect(
             self.handle_list_selection_changed
         )
         self.remove_tag_button.clicked.connect(self.remove_from_list)
         self.add_tag_button.clicked.connect(self.add_to_list)
-        self.read_List_button.clicked.connect(self.read_tag_list_button_clicked)
+        self.read_List_button.clicked.connect(
+            self.read_tag_list_button_clicked)
         self.enable_event.stateChanged.connect(self.set_read_write_selection)
 
         self.write_selected_radio.toggled.connect(self.read_event_deselected)
@@ -1343,10 +1393,10 @@ class MainWindow(QMainWindow):
 
         self.tree_data = {}
 
-    
     def add_to_tree(self, data, parent):
         if parent.childCount() > 0:
-            existing_keys = {parent.child(i).text(0): parent.child(i) for i in range(parent.childCount())}
+            existing_keys = {parent.child(i).text(0): parent.child(
+                i) for i in range(parent.childCount())}
         else:
             existing_keys = {}
 
@@ -1358,18 +1408,17 @@ class MainWindow(QMainWindow):
                 else:
                     item.setText(1, str(value))
             else:
-                new_item = QTreeWidgetItem(parent, [key, '' if isinstance(value, dict) else str(value)])
+                new_item = QTreeWidgetItem(
+                    parent, [key, '' if isinstance(value, dict) else str(value)])
                 if isinstance(value, dict):
                     self.add_to_tree(value, new_item)
 
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
 
-
     def read_event_selected(self):
         self.event_oneshot.setEnabled(True)
         self.event_timed.setEnabled(True)
-
 
     def read_event_deselected(self):
         self.event_oneshot.setEnabled(False)
@@ -1379,14 +1428,11 @@ class MainWindow(QMainWindow):
         self.event_timed.setChecked(False)
         self.event_radio_group.setExclusive(True)
 
-    
     def monitor_read_set_time_selected(self):
         self.event_time.setEnabled(True)
 
-    
     def monitor_read_one_shot_selected(self):
         self.event_time.setEnabled(False)
-
 
     def set_read_write_selection(self):
         if self.enable_event.isChecked():
@@ -1406,21 +1452,19 @@ class MainWindow(QMainWindow):
             self.event_oneshot.setChecked(False)
             self.event_radio_group.setExclusive(True)
 
-
     def handle_list_selection_changed(self):
-        self.remove_tag_button.setEnabled(bool(self.tags_to_read_list.selectedIndexes()))
-
+        self.remove_tag_button.setEnabled(
+            bool(self.tags_to_read_list.selectedIndexes()))
 
     def remove_from_list(self):
         for index in self.tags_to_read_list.selectedIndexes():
             self.tags_to_read_list.model().removeRow(index.row())
-            
+
             self.settings.setValue('tag_list', self.get_from_list())
 
             # check if list is empty now
             if self.tags_to_read_list.model().rowCount() == 0:
                 self.read_List_button.setEnabled(False)
-
 
     def add_to_list(self):
         if check_plc_connection(plc, self):
@@ -1428,9 +1472,11 @@ class MainWindow(QMainWindow):
                 if self.is_valid_tag_input(self.tag_input.text(), tag_types):
                     # check if tag already in list
                     if self.tag_input.text() not in [self.tags_to_read_list.model().item(i).text() for i in range(self.tags_to_read_list.model().rowCount())]:
-                        self.tags_to_read_list.model().appendRow(QtGui.QStandardItem(self.tag_input.text()))
+                        self.tags_to_read_list.model().appendRow(
+                            QtGui.QStandardItem(self.tag_input.text()))
                         self.read_List_button.setEnabled(True)
-                        self.settings.setValue('tag_list', self.get_from_list())
+                        self.settings.setValue(
+                            'tag_list', self.get_from_list())
                 else:
                     self.print_results("Tag or tags do not exist in PLC.")
             else:
@@ -1438,14 +1484,12 @@ class MainWindow(QMainWindow):
         else:
             self.showNotConnectedDialog()
 
-    
     def populate_list_from_history(self):
         tags = self.settings.value('tag_list', '')
         if tags != '':
             for tag in tags.split(','):
                 tag = tag.strip()
                 self.tags_to_read_list.model().appendRow(QtGui.QStandardItem(tag))
-    
 
     def get_from_list(self):
         tags = ''
@@ -1465,10 +1509,8 @@ class MainWindow(QMainWindow):
         self.settings.setValue('tag', self.tag_input.text())
         self.settings.setValue('tag_list', self.get_from_list())
 
-    
     def add_to_table(self, data):
         self.table.setData(data)
-        
 
     def on_ip_text_changed(self, text):
         if self.ip_input.hasAcceptableInput():
@@ -1476,13 +1518,11 @@ class MainWindow(QMainWindow):
         else:
             self.ip_input.setStyleSheet("color: red;")
 
-
     def on_file_text_changed(self, text):
         if self.file_name.hasAcceptableInput():
             self.file_name.setStyleSheet("color: white;")
         else:
             self.file_name.setStyleSheet("color: red;")
-
 
     def on_tag_text_changed(self, text):
         if self.tag_input.hasAcceptableInput():
@@ -1490,10 +1530,8 @@ class MainWindow(QMainWindow):
         else:
             self.tag_input.setStyleSheet("color: red;")
 
-
     def file_format_changed(self, i):
         self.file_format = i
-
 
     def showNotConnectedDialog(self):
         msgBox = QMessageBox()
@@ -1504,7 +1542,6 @@ class MainWindow(QMainWindow):
 
         returnValue = msgBox.exec()
 
-
     def showLostConnectionDialog(self):
         msgBox = QMessageBox()
         msgBox.setIcon(QMessageBox.Information)
@@ -1514,28 +1551,24 @@ class MainWindow(QMainWindow):
 
         returnValue = msgBox.exec()
 
-    
     def enable_buttons(self):
         self.trend_button.setDisabled(False)
         self.read_button.setDisabled(False)
         self.write_button.setDisabled(False)
         self.monitor_button.setDisabled(False)
 
-    
     def disable_buttons(self):
         self.trend_button.setDisabled(True)
         self.read_button.setDisabled(True)
         self.write_button.setDisabled(True)
         self.monitor_button.setDisabled(True)
-        
-        
+
     def connect_button_clicked(self):
         if self.ip_input.hasAcceptableInput():
             connect_to_plc(self.ip_input.text(), self.connect_button, self)
         else:
             self.print_results("IP address is invalid.")
-    
-    
+
     def is_valid_tag_input(self, tags, tag_types):
         # Validate format
         pattern = r"^[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.\w+(?:\[\d+\])?)*(?:\{\d+\})?(?:,\s*[A-Za-z_][A-Za-z\d_]*(?:\[\d+\])?(?:\.\w+(?:\[\d+\])?)*(?:\{\d+\})?)*$"
@@ -1549,12 +1582,11 @@ class MainWindow(QMainWindow):
         # Check against dictionary
         for input_tag in input_tags:
             tag_components = input_tag.split('.')
-            #if not any(all(tc == kc.split('.')[i] for i, tc in enumerate(input_tag) if i < len(kc.split('.'))) for kc in tag_types):
+            # if not any(all(tc == kc.split('.')[i] for i, tc in enumerate(input_tag) if i < len(kc.split('.'))) for kc in tag_types):
             if input_tag not in tag_types:
                 return False
 
         return True
-    
 
     def check_and_convert_file_name(self):
         file_name = self.file_name.text()
@@ -1567,7 +1599,6 @@ class MainWindow(QMainWindow):
 
         return file_name
 
-
     def read_tag_button_clicked(self):
         if check_plc_connection(plc, self):
             if self.tag_input.hasAcceptableInput():
@@ -1575,9 +1606,11 @@ class MainWindow(QMainWindow):
                     self.save_history()
                     if self.file_name.text() != '':
                         file_name = self.check_and_convert_file_name()
-                        read_tag(self.ip_input.text(), self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(), file_name=file_name, file_selection = self.file_format)
+                        read_tag(self.ip_input.text(), self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(
+                        ), file_name=file_name, file_selection=self.file_format)
                     else:
-                        read_tag(self.ip_input.text(), self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
+                        read_tag(self.ip_input.text(), self.tag_input.text(
+                        ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
                 else:
                     self.print_results("Tag or tags do not exist in PLC.")
             else:
@@ -1585,21 +1618,21 @@ class MainWindow(QMainWindow):
         else:
             self.showNotConnectedDialog()
 
-
     def read_tag_list_button_clicked(self):
         if check_plc_connection(plc, self):
             if self.is_valid_tag_input(self.get_from_list(), tag_types):
                 self.save_history()
                 if self.file_name.text() != '':
                     file_name = self.check_and_convert_file_name()
-                    read_tag(self.ip_input.text(), self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(), file_name=file_name, file_selection = self.file_format)
+                    read_tag(self.ip_input.text(), self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(
+                    ), file_name=file_name, file_selection=self.file_format)
                 else:
-                    read_tag(self.ip_input.text(), self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection = self.file_format)
+                    read_tag(self.ip_input.text(), self.get_from_list(
+                    ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
             else:
                 self.print_results("Tag or tags do not exist in PLC.")
         else:
             self.showNotConnectedDialog()
-
 
     def write_tag_button_clicked(self):
         if check_plc_connection(plc, self):
@@ -1608,9 +1641,11 @@ class MainWindow(QMainWindow):
                     self.save_history()
                     if self.file_name.text() != '':
                         file_name = self.check_and_convert_file_name()
-                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection = self.file_format)
+                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(
+                        ), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection=self.file_format)
                     else:
-                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection = self.file_format)
+                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(
+                        ), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection=self.file_format)
                 else:
                     self.print_results("Tag or tags do not exist in PLC.")
             else:
@@ -1618,16 +1653,15 @@ class MainWindow(QMainWindow):
         else:
             self.showNotConnectedDialog()
 
-
     def print_results(self, results):
         self.results.appendPlainText(results)
         # set scroll bar to bottom
-        self.results.verticalScrollBar().setValue(self.results.verticalScrollBar().maximum())
+        self.results.verticalScrollBar().setValue(
+            self.results.verticalScrollBar().maximum())
 
     def update_trend_data(self, results, timestamps):
         self.trender_results = results
         self.trender_timestamps = timestamps
-
 
     def trender_thread(self):
         if self.trender.running:
@@ -1635,7 +1669,8 @@ class MainWindow(QMainWindow):
                 file_name = self.check_and_convert_file_name()
             else:
                 file_name = ''
-            process_trend_data(self.trender.tags, self.trender.results, self.trender.timestamps, self.trender.single_tag, self.file_enabled.isChecked(), file_name, self.file_format_selection.currentIndex())
+            process_trend_data(self.trender.tags, self.trender.results, self.trender.timestamps, self.trender.single_tag,
+                               self.file_enabled.isChecked(), file_name, self.file_format_selection.currentIndex())
             self.trender.stop()
             self.trend_button.setText("Start Trend")
         else:
@@ -1648,7 +1683,8 @@ class MainWindow(QMainWindow):
                         if not self.trend_thread.isRunning():
                             self.trender.ip = self.ip_input.text()
                             self.trender.tags = self.tag_input.text()
-                            self.trender.interval = (self.trend_rate.value() * 1000)
+                            self.trender.interval = (
+                                self.trend_rate.value() * 1000)
                             self.trender.plc = plc
                             self.trender.running = True
                             self.trend_thread.start()
@@ -1661,7 +1697,6 @@ class MainWindow(QMainWindow):
             else:
                 self.showNotConnectedDialog()
 
-    
     def process_monitor_data(self, yaml_data):
         if self.file_enabled.isChecked():
             if self.file_name.text() != '':
@@ -1671,8 +1706,7 @@ class MainWindow(QMainWindow):
                     file_name = 'trend_data.yaml'
                 else:
                     file_name = 'trend_data.csv'
-            
-            
+
             with open(file_name, 'w') as f:
 
                 if self.file_format == 0:
@@ -1691,7 +1725,6 @@ class MainWindow(QMainWindow):
                             row.append(value)
 
                         writer.writerow(row)
-
 
     def monitorer_thread(self):
         if self.monitorer.running:
@@ -1712,12 +1745,14 @@ class MainWindow(QMainWindow):
                             self.monitorer.read_selected = self.read_selected_radio.isChecked()
                             self.monitorer.write_selected = self.write_selected_radio.isChecked()
                             self.monitorer.tag = self.tag_input.text()
-                            self.monitorer.value = set_data_type(self.monitor_value.text(), self.tag_input.text())
-                            self.monitorer.interval = (self.monitor_rate.value() * 1000)
+                            self.monitorer.value = set_data_type(
+                                self.monitor_value.text(), self.tag_input.text())
+                            self.monitorer.interval = (
+                                self.monitor_rate.value() * 1000)
                             self.monitorer.plc = plc
 
                             self.monitorer.read_once = self.event_oneshot.isChecked()
-                            
+
                             if self.event_timed.isChecked():
                                 self.monitorer.read_time = self.event_time.value()
 
@@ -1730,11 +1765,9 @@ class MainWindow(QMainWindow):
                     self.print_results("Tag input is invalid.")
             else:
                 self.showNotConnectedDialog()
-    
-    
+
     def start_plc_connection_check(self):
         self.plc_connection_check_timer.start(5000)
-
 
     def stop_plc_connection_check(self):
         self.plc_connection_check_timer.stop()
