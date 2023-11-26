@@ -132,7 +132,7 @@ def data_to_dict(data):
             else:
                 processed_data.append({tag.tag: tag.value})
     else:
-        processed_data.append({tag.tag: tag.value})
+        processed_data.append({data.tag: data.value})
 
     return processed_data
 
@@ -267,6 +267,7 @@ def read_tag(tag_names, plc, result_window, **kwargs):
         list: A list of dictionaries containing the tag names and their corresponding values.
     """
 
+    # split tag name(s) into a list
     tag_names = [name.strip() for name in tag_names.split(',')]
 
     store_to_file = kwargs.get('store_to_file', False)
@@ -280,19 +281,13 @@ def read_tag(tag_names, plc, result_window, **kwargs):
     tag_data = []
 
     try:
-        result_window.print_results(f'Reading Tags...\n')
+        if len(tag_names) == 1:
+            result_window.print_results(f'Reading Tag: {tag_names[0]}\n')
+        else:
+            result_window.print_results(f'Reading Tags: {", " .join(tag_names)}\n')
+        
+        # get the tag data from the PLC
         read_result = plc.read(*tag_names)
-
-        if store_to_file:
-            if not isinstance(read_result, list):
-                read_result = [read_result]
-
-            if file_selection == 0:
-                serialize_to_yaml(read_result, yaml_file=file_name)
-            elif file_selection == 1:
-                data = data_to_dict(read_result)
-                data = [flatten_dict(item) for item in data]
-                write_to_csv(data, file_name)
 
         # Loop through each tag in the list
         if len(tag_names) == 1:
@@ -325,6 +320,16 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                             {tag_names[i]: value}, result_window.tree.invisibleRootItem())
                 else:
                     result_window.print_results(f"Error: {read_result[i].error}")
+                    
+        if store_to_file:
+            if file_selection == 0:
+                serialize_to_yaml(read_result, yaml_file=file_name)
+            elif file_selection == 1:
+                data = data_to_dict(read_result)
+                data = [flatten_dict(item) for item in data]
+                write_to_csv(data, file_name)
+                
+            result_window.print_results(f'Successfully wrote to file: {file_name}\n')
 
         for result in tag_data:
             for tag, value in result.items():
@@ -339,7 +344,7 @@ def read_tag(tag_names, plc, result_window, **kwargs):
         result_window.print_results(f'')
         result_window.add_to_table(result_window.tag_read_history)
     except Exception as e:
-        print(f"Error in read_tags_from_plc: {e}")
+        print(f"Error in read_tags: {e}")
 
 
 def get_tags_from_plc(plc):
@@ -648,7 +653,10 @@ def flatten_dict(d, parent_key='', sep='.'):
             items.extend(flatten_dict(v, new_key, sep=sep).items())
         elif isinstance(v, list):
             for i, item in enumerate(v):
-                items.append((f"{new_key}[{i}]", item))
+                if isinstance(item, dict):
+                    items.extend(flatten_dict(item, f"{new_key}[{i}]", sep=sep).items())
+                else:
+                    items.append((f"{new_key}[{i}]", item))
         else:
             items.append((new_key, v))
     return dict(items)
