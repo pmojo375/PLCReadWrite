@@ -482,7 +482,7 @@ def set_data_type(value, tag):
         return None
 
 
-def write_tag(ip, tags, values, main_window, plc, **kwargs):
+def write_tag(tags, values, main_window, plc, **kwargs):
     """
     Writes a value to a tag in a PLC.
 
@@ -702,7 +702,7 @@ class Trender(QObject):
         A method to stop the thread.
     """
 
-    update = Signal(str)
+    update = Signal(str, str)
     update_trend_data = Signal(list, list)
     finished = Signal()
 
@@ -717,6 +717,7 @@ class Trender(QObject):
         self.first_pass = True
         self.single_tag = True
         self.plc = None
+        self.tag_data = []
 
     def run(self):
         """
@@ -724,6 +725,7 @@ class Trender(QObject):
         """
         start_time = datetime.datetime.now()
 
+        self.first_pass = True
         self.results = []
         self.timestamps = []
 
@@ -735,10 +737,12 @@ class Trender(QObject):
         except Exception as e:
             print(f"Error in Trender: {e}")
 
-        self.update.emit('Starting Trend...')
+        self.update.emit('Starting Trend...<br>', 'white')
 
         while self.running:
 
+            self.tag_data = []
+            
             try:
                 result = self.plc.read(*formatted_tags)
 
@@ -753,18 +757,26 @@ class Trender(QObject):
                             self.results.append([])
 
                     self.first_pass = False
-
                 self.update.emit(
-                    f'<br>Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+                    f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}<br>', 'white')
 
                 if self.single_tag:
-                    self.update.emit(
-                        f'{formatted_tags[0]} = {result[0].value}')
+                    self.tag_data = crawl_and_format(result[0].value, formatted_tags[0], {})
+                    for tag, value in self.tag_data.items():
+                        self.update.emit(f'{tag} = {value}', 'yellow')
                     self.results.append(result[0].value)
+                    self.update.emit('', 'white')
                 else:
                     for i, r in enumerate(result):
-                        self.update.emit(f'{formatted_tags[i]} = {r.value}')
+                        self.tag_data.append(crawl_and_format(r.value, formatted_tags[i], {}))
                         self.results[i].append(r.value)
+                        
+                    for result in self.tag_data:
+                        for tag, value in result.items():
+                            self.update.emit(f'{tag} = {value}', 'yellow')
+                    
+                    
+                    self.update.emit('', 'white')
 
                 self.timestamps.append(
                     (datetime.datetime.now() - start_time).total_seconds() * 1000)
@@ -1687,20 +1699,34 @@ class MainWindow(QMainWindow):
         if check_plc_connection(plc, self):
             if self.tag_input.hasAcceptableInput():
                 if self.is_valid_tag_input(self.tag_input.text(), tag_types):
-                    self.save_history()
-                    if self.file_name.text() != '':
-                        file_name = self.check_and_convert_file_name()
-                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(
-                        ), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection=self.file_format)
-                    else:
-                        write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(
-                        ), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection=self.file_format)
+                    if self.verify_write_values():
+                        self.save_history()
+                        if self.file_name.text() != '':
+                            file_name = self.check_and_convert_file_name()
+                            write_tag(self.tag_input.text(), self.write_value.text(
+                            ), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection=self.file_format)
+                        else:
+                            write_tag(self.tag_input.text(), self.write_value.text(
+                            ), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection=self.file_format)
                 else:
                     self.print_results("Tag or tags do not exist in PLC.", 'red')
             else:
                 self.print_results("Tag input is invalid.", 'red')
         else:
             self.showNotConnectedDialog()
+            
+    def verify_write_values(self):
+        if not self.write_value.text() == '':
+            values = [v.strip() for v in self.write_value.text().split(',')]
+            tags = [t.strip() for t in self.tag_input.text().split(',')]
+            
+            if len(values) != len(tags):
+                self.print_results("Number of values does not match number of tags.<br>", 'red')
+            
+            return True
+        else:
+            self.print_results("No value entered.<br>", 'red')
+            
 
     def print_results(self, results, color='white'):
         
