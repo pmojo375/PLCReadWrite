@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QWidget,
     QPlainTextEdit,
+    QTextEdit,
     QLabel,
     QMessageBox,
     QComboBox,
@@ -29,7 +30,7 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem,
 )
 from PySide6 import QtGui
-from PySide6.QtGui import QRegularExpressionValidator
+from PySide6.QtGui import QRegularExpressionValidator, QTextCursor
 import yaml
 import re
 import datetime
@@ -282,9 +283,9 @@ def read_tag(tag_names, plc, result_window, **kwargs):
 
     try:
         if len(tag_names) == 1:
-            result_window.print_results(f'Reading Tag: {tag_names[0]}\n')
+            result_window.print_results(f'Reading Tag: {tag_names[0]}<br>')
         else:
-            result_window.print_results(f'Reading Tags: {", " .join(tag_names)}\n')
+            result_window.print_results(f'Reading Tags: {", " .join(tag_names)}<br>')
         
         # get the tag data from the PLC
         read_result = plc.read(*tag_names)
@@ -319,7 +320,7 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                         result_window.add_to_tree(
                             {tag_names[i]: value}, result_window.tree.invisibleRootItem())
                 else:
-                    result_window.print_results(f"Error: {read_result[i].error}")
+                    result_window.print_results(f"Error: {read_result[i].error}", 'red')
                     
         if store_to_file:
             if file_selection == 0:
@@ -329,7 +330,7 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                 data = [flatten_dict(item) for item in data]
                 write_to_csv(data, file_name)
                 
-            result_window.print_results(f'Successfully wrote to file: {file_name}\n')
+            result_window.print_results(f'Successfully wrote to file: {file_name}<br>')
 
         for result in tag_data:
             for tag, value in result.items():
@@ -338,7 +339,7 @@ def read_tag(tag_names, plc, result_window, **kwargs):
 
                 tag = re.sub(pattern, '', tag)
 
-                result_window.print_results(f"{tag} = {value}")
+                result_window.print_results(f"{tag} = {value}", 'yellow')
                 result_window.tag_read_history[tag] = value
 
         result_window.print_results(f'')
@@ -754,7 +755,7 @@ class Trender(QObject):
                     self.first_pass = False
 
                 self.update.emit(
-                    f'\nTimestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
+                    f'<br>Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}')
 
                 if self.single_tag:
                     self.update.emit(
@@ -899,7 +900,7 @@ class Monitorer(QObject):
                         now = datetime.datetime.now()
 
                         self.update.emit(
-                            f'\nTag = {self.value} at Timestamp: {timestamp}')
+                            f'<br>Tag = {self.value} at Timestamp: {timestamp}')
 
                         yaml_temp['Timestamp'] = timestamp
 
@@ -1104,6 +1105,7 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout()
         entry_layout = QVBoxLayout()
         results_layout = QVBoxLayout()
+        results_label_layout = QHBoxLayout()
         results_layout.addWidget(container)
         ip_layout = QHBoxLayout()
         read_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
@@ -1262,14 +1264,15 @@ class MainWindow(QMainWindow):
         self.file_browser = QPushButton("Browse")
         self.connect_button = QPushButton("Connect")
         self.results_label = QLabel("Results")
-        self.results = QPlainTextEdit()
+        self.results = QTextEdit()
         self.file_format_selection = QComboBox()
         self.file_format = 0
         self.table = TableView(0, 2)
         self.table_label = QLabel("Read History")
+        self.clear_results_button = QPushButton("Clear Results")
 
         # Set parameters
-        self.tag_input.setPlaceholderText("Tag")
+        self.tag_input.setPlaceholderText("Tag1, Tag2...")
         self.file_name.setPlaceholderText("File Name")
         self.ip_input.setMaxLength(15)
         self.ip_input.setPlaceholderText("IP Address")
@@ -1296,7 +1299,9 @@ class MainWindow(QMainWindow):
         entry_layout.addLayout(selection_layout)
         entry_layout.addLayout(file_layout)
         entry_layout.addWidget(tabs)
-        results_layout.addWidget(self.results_label)
+        results_label_layout.addWidget(self.results_label)
+        results_label_layout.addWidget(self.clear_results_button)
+        results_layout.addLayout(results_label_layout)
         results_layout.addWidget(self.results)
         results_layout.addWidget(self.table_label)
         results_layout.addWidget(self.tree)
@@ -1393,6 +1398,7 @@ class MainWindow(QMainWindow):
         self.read_selected_radio.toggled.connect(self.read_event_selected)
         self.event_timed.toggled.connect(self.monitor_read_set_time_selected)
         self.event_oneshot.toggled.connect(self.monitor_read_one_shot_selected)
+        self.clear_results_button.clicked.connect(self.clear_results)
 
         # Load stored data if available
         self.ip_input.setText(self.settings.value('ip', ''))
@@ -1400,6 +1406,9 @@ class MainWindow(QMainWindow):
         self.populate_list_from_history()
 
         self.tree_data = {}
+
+    def clear_results(self):
+        self.results.clear()
 
     def add_to_tree(self, data, parent):
         if parent.childCount() > 0:
@@ -1506,19 +1515,21 @@ class MainWindow(QMainWindow):
 
     def add_to_list(self):
         if check_plc_connection(plc, self):
-            if self.tag_input.hasAcceptableInput():
-                if self.is_valid_tag_input(self.tag_input.text(), tag_types):
-                    # check if tag already in list
-                    if self.tag_input.text() not in [self.tags_to_read_list.model().item(i).text() for i in range(self.tags_to_read_list.model().rowCount())]:
-                        self.tags_to_read_list.model().appendRow(
-                            QtGui.QStandardItem(self.tag_input.text()))
-                        self.read_List_button.setEnabled(True)
-                        self.settings.setValue(
-                            'tag_list', self.get_from_list())
+            tags = [t.strip() for t in self.tag_input.text().split(',')]
+            for tag in tags:
+                if self.tag_input.hasAcceptableInput():
+                    if self.is_valid_tag_input(tag, tag_types):
+                        # check if tag already in list
+                        if tag not in [self.tags_to_read_list.model().item(i).text() for i in range(self.tags_to_read_list.model().rowCount())]:
+                            self.tags_to_read_list.model().appendRow(
+                                QtGui.QStandardItem(tag))
+                            self.read_List_button.setEnabled(True)
+                            self.settings.setValue(
+                                'tag_list', self.get_from_list())
+                    else:
+                        self.print_results(f"{tag} does not exist in PLC.", 'red')
                 else:
-                    self.print_results("Tag or tags do not exist in PLC.")
-            else:
-                self.print_results("Tag input is invalid.")
+                    self.print_results("Tag input: '{tag}' is invalid.", 'red')
         else:
             self.showNotConnectedDialog()
 
@@ -1605,7 +1616,7 @@ class MainWindow(QMainWindow):
         if self.ip_input.hasAcceptableInput():
             connect_to_plc(self.ip_input.text(), self.connect_button, self)
         else:
-            self.print_results("IP address is invalid.")
+            self.print_results("IP address is invalid.", 'red')
 
     def is_valid_tag_input(self, tags, tag_types):
         # Validate format
@@ -1650,9 +1661,9 @@ class MainWindow(QMainWindow):
                         read_tag(self.tag_input.text(
                         ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
                 else:
-                    self.print_results("Tag or tags do not exist in PLC.")
+                    self.print_results("Tag or tags do not exist in PLC.", 'red')
             else:
-                self.print_results("Tag input is invalid.")
+                self.print_results("Tag input is invalid.", 'red')
         else:
             self.showNotConnectedDialog()
 
@@ -1668,7 +1679,7 @@ class MainWindow(QMainWindow):
                     read_tag(self.get_from_list(
                     ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
             else:
-                self.print_results("Tag or tags do not exist in PLC.")
+                self.print_results("Tag or tags do not exist in PLC.", 'red')
         else:
             self.showNotConnectedDialog()
 
@@ -1685,14 +1696,18 @@ class MainWindow(QMainWindow):
                         write_tag(self.ip_input.text(), self.tag_input.text(), self.write_value.text(
                         ), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection=self.file_format)
                 else:
-                    self.print_results("Tag or tags do not exist in PLC.")
+                    self.print_results("Tag or tags do not exist in PLC.", 'red')
             else:
-                self.print_results("Tag input is invalid.")
+                self.print_results("Tag input is invalid.", 'red')
         else:
             self.showNotConnectedDialog()
 
-    def print_results(self, results):
-        self.results.appendPlainText(results)
+    def print_results(self, results, color='white'):
+        
+        cursor = self.results.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        
+        cursor.insertHtml(f"<span style='color: {color};'>{results}</span><br>")
         # set scroll bar to bottom
         self.results.verticalScrollBar().setValue(
             self.results.verticalScrollBar().maximum())
@@ -1729,9 +1744,9 @@ class MainWindow(QMainWindow):
                             self.trend_plot_button.setEnabled(True)
                             self.trend_button.setText("Stop Trend")
                     else:
-                        self.print_results("Tag or tags do not exist in PLC.")
+                        self.print_results("Tag or tags do not exist in PLC.", 'red')
                 else:
-                    self.print_results("Tag input is invalid.")
+                    self.print_results("Tag input is invalid.", 'red')
             else:
                 self.showNotConnectedDialog()
 
@@ -1798,9 +1813,9 @@ class MainWindow(QMainWindow):
                             self.monitor_thread.start()
                             self.monitor_button.setText("Stop Monitor")
                     else:
-                        self.print_results("Tag or tags do not exist in PLC.")
+                        self.print_results("Tag or tags do not exist in PLC.", 'red')
                 else:
-                    self.print_results("Tag input is invalid.")
+                    self.print_results("Tag input is invalid.", 'red')
             else:
                 self.showNotConnectedDialog()
 
