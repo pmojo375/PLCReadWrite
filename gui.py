@@ -250,15 +250,15 @@ def crawl_and_format(obj, name, data):
     return data
 
 
-def read_tag(ip, tags, plc, main_window, **kwargs):
+def read_tag(tag_names, plc, result_window, **kwargs):
     """
     Reads the values of the given tags from the PLC with the given IP address and displays the results in the given result window.
 
     Args:
-        ip (str): The IP address of the PLC to read from.
-        tags (list): A list of tag names to read from the PLC.
-        result_window (QPlainTextEdit): The window to display the results in.
+        ip_address (str): The IP address of the PLC to read from.
+        tag_names (list): A list of tag names to read from the PLC.
         plc (LogixDriver): An optional pre-initialized LogixDriver instance to use for reading the tags.
+        result_window (QPlainTextEdit): The window to display the results in.
         **kwargs: Additional keyword arguments.
             store_to_yaml (bool): Whether to store the results in a YAML file. Default is False.
             yaml_file (str): The name of the YAML file to store the results in. Default is 'tag_values.yaml'.
@@ -267,7 +267,7 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
         list: A list of dictionaries containing the tag names and their corresponding values.
     """
 
-    tags = [t.strip() for t in tags.split(',')]
+    tag_names = [name.strip() for name in tag_names.split(',')]
 
     store_to_file = kwargs.get('store_to_file', False)
     file_selection = kwargs.get('file_selection', 0)
@@ -277,69 +277,69 @@ def read_tag(ip, tags, plc, main_window, **kwargs):
     elif file_selection == 1:
         file_name = kwargs.get('file_name', 'tag_values.csv')
 
-    return_data = []
+    tag_data = []
 
     try:
-        main_window.print_results(f'Reading Tags...\n')
-        ret = plc.read(*tags)
+        result_window.print_results(f'Reading Tags...\n')
+        read_result = plc.read(*tag_names)
 
         if store_to_file:
-            if not isinstance(ret, list):
-                ret = [ret]
+            if not isinstance(read_result, list):
+                read_result = [read_result]
 
             if file_selection == 0:
-                serialize_to_yaml(ret, yaml_file=file_name)
+                serialize_to_yaml(read_result, yaml_file=file_name)
             elif file_selection == 1:
-                data = data_to_dict(ret)
+                data = data_to_dict(read_result)
                 data = [flatten_dict(item) for item in data]
                 write_to_csv(data, file_name)
 
-        # loop through each tag in the list
-        if len(tags) == 1:
-            if ret.error is None:
-                entry_tag = tags[0]
-                value = ret.value
-                return_data.append(crawl_and_format(value, entry_tag, {}))
+        # Loop through each tag in the list
+        if len(tag_names) == 1:
+            if read_result.error is None:
+                entry_tag = tag_names[0]
+                value = read_result.value
+                tag_data.append(crawl_and_format(value, entry_tag, {}))
                 if isinstance(value, list):
                     for i, v in enumerate(value):
-                        main_window.add_to_tree(
-                            {f'{ret.tag}[{i}]': v}, main_window.tree.invisibleRootItem())
+                        result_window.add_to_tree(
+                            {f'{read_result.tag}[{i}]': v}, result_window.tree.invisibleRootItem())
                 else:
-                    main_window.add_to_tree(
-                        {ret.tag: value}, main_window.tree.invisibleRootItem())
+                    result_window.add_to_tree(
+                        {read_result.tag: value}, result_window.tree.invisibleRootItem())
             else:
-                main_window.print_results(f"Error: {ret.error}")
+                result_window.print_results(f"Error: {read_result.error}")
 
         else:
-            for i, tag in enumerate(tags):
-                if ret[i].error is None:
-                    entry_tag = tags[i]
-                    value = ret[i].value
-                    return_data.append(crawl_and_format(value, entry_tag, {}))
+            for i, tag in enumerate(tag_names):
+                if read_result[i].error is None:
+                    entry_tag = tag_names[i]
+                    value = read_result[i].value
+                    tag_data.append(crawl_and_format(value, entry_tag, {}))
                     if isinstance(value, list):
                         for i, v in enumerate(value):
-                            main_window.add_to_tree(
-                                {f'{tags[i]}[{i}]': v}, main_window.tree.invisibleRootItem())
+                            result_window.add_to_tree(
+                                {f'{tag_names[i]}[{i}]': v}, result_window.tree.invisibleRootItem())
                     else:
-                        main_window.add_to_tree(
-                            {tags[i]: value}, main_window.tree.invisibleRootItem())
+                        result_window.add_to_tree(
+                            {tag_names[i]: value}, result_window.tree.invisibleRootItem())
                 else:
-                    main_window.print_results(f"Error: {ret[i].error}")
+                    result_window.print_results(f"Error: {read_result[i].error}")
 
-        for result in return_data:
+        for result in tag_data:
             for tag, value in result.items():
 
                 pattern = r'\{[^}]*\}'
 
                 tag = re.sub(pattern, '', tag)
 
-                main_window.print_results(f"{tag} = {value}")
-                main_window.tag_read_history[tag] = value
+                result_window.print_results(f"{tag} = {value}")
+                result_window.tag_read_history[tag] = value
 
-        main_window.print_results(f'')
-        main_window.add_to_table(main_window.tag_read_history)
+        result_window.print_results(f'')
+        result_window.add_to_table(result_window.tag_read_history)
     except Exception as e:
-        print(f"Error in read_tag: {e}")
+        print(f"Error in read_tags_from_plc: {e}")
 
 
 def get_tags_from_plc(plc):
@@ -1636,10 +1636,10 @@ class MainWindow(QMainWindow):
                     self.save_history()
                     if self.file_name.text() != '':
                         file_name = self.check_and_convert_file_name()
-                        read_tag(self.ip_input.text(), self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(
+                        read_tag(self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(
                         ), file_name=file_name, file_selection=self.file_format)
                     else:
-                        read_tag(self.ip_input.text(), self.tag_input.text(
+                        read_tag(self.tag_input.text(
                         ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
                 else:
                     self.print_results("Tag or tags do not exist in PLC.")
@@ -1654,10 +1654,10 @@ class MainWindow(QMainWindow):
                 self.save_history()
                 if self.file_name.text() != '':
                     file_name = self.check_and_convert_file_name()
-                    read_tag(self.ip_input.text(), self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(
+                    read_tag(self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(
                     ), file_name=file_name, file_selection=self.file_format)
                 else:
-                    read_tag(self.ip_input.text(), self.get_from_list(
+                    read_tag(self.get_from_list(
                     ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
             else:
                 self.print_results("Tag or tags do not exist in PLC.")
