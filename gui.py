@@ -342,8 +342,7 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                 result_window.print_results(f"{tag} = {value}", 'yellow')
                 result_window.tag_read_history[tag] = value
 
-        result_window.print_results(f'')
-        result_window.add_to_table(result_window.tag_read_history)
+        result_window.print_results(f'', 'white')
     except Exception as e:
         print(f"Error in read_tags: {e}")
 
@@ -1041,37 +1040,6 @@ class AboutWindow(QWidget):
         self.setLayout(layout)
 
 
-# Custom table widget for displaying tag-value pairs
-class TableView(QTableWidget):
-    def __init__(self, *args):
-        QTableWidget.__init__(self, *args)
-        self.setHorizontalHeaderLabels(['Tag', 'Value'])
-        self.resizeRowsToContents()
-
-        # Set columns to automatically resize and fill the widget
-        self.header = self.horizontalHeader()
-        self.header.setSectionResizeMode(QHeaderView.Stretch)
-
-    def setData(self, data):
-        row_count = self.rowCount()
-        length = len(data.keys())
-
-        if length > row_count:
-            self.setRowCount(length)
-
-        for i, (tag, value) in enumerate(data.items()):
-            new_tag = QTableWidgetItem(tag)
-            new_value = QTableWidgetItem(value)
-
-            new_tag.setFlags(new_tag.flags() ^ Qt.ItemIsEditable)
-            new_value.setFlags(new_value.flags() ^ Qt.ItemIsEditable)
-            self.setItem(i, 0, new_tag)
-            self.setItem(i, 1, new_value)
-
-        self.header.setSectionResizeMode(0, QHeaderView.Stretch)
-        self.header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-
-
 class MainWindow(QMainWindow):
     def show_about_window(self):
         if self.w is None:
@@ -1309,8 +1277,7 @@ class MainWindow(QMainWindow):
         self.results = QTextEdit()
         self.file_format_selection = QComboBox()
         self.file_format = 0
-        self.table = TableView(0, 2)
-        self.table_label = QLabel("Read History")
+        self.tree_label = QLabel("Read History")
         self.clear_results_button = QPushButton("Clear Results")
 
         # Set parameters
@@ -1345,9 +1312,8 @@ class MainWindow(QMainWindow):
         results_label_layout.addWidget(self.clear_results_button)
         results_layout.addLayout(results_label_layout)
         results_layout.addWidget(self.results)
-        results_layout.addWidget(self.table_label)
+        results_layout.addWidget(self.tree_label)
         results_layout.addWidget(self.tree)
-        # results_layout.addWidget(self.table)
 
         self.tag_read_history = {}
 
@@ -1599,9 +1565,6 @@ class MainWindow(QMainWindow):
         self.settings.setValue('ip', self.ip_input.text())
         self.settings.setValue('tag', self.tag_input.text())
         self.settings.setValue('tag_list', self.get_from_list())
-
-    def add_to_table(self, data):
-        self.table.setData(data)
 
     def on_ip_text_changed(self, text):
         if self.ip_input.hasAcceptableInput():
