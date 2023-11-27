@@ -304,18 +304,27 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                 result_window.print_results(f"Error: {read_result.error}")
 
         else:
+            
+            pattern = r'\{[^}]*\}'
+
             for i, tag in enumerate(tag_names):
                 if read_result[i].error is None:
                     entry_tag = tag_names[i]
                     value = read_result[i].value
                     tag_data.append(crawl_and_format(value, entry_tag, {}))
                     if isinstance(value, list):
-                        for i, v in enumerate(value):
+                        for y, v in enumerate(value):
+                            
+                            tag_name_formatted = re.sub(pattern, '', tag_names[i])
+
                             result_window.add_to_tree(
-                                {f'{tag_names[i]}[{i}]': v}, result_window.tree.invisibleRootItem())
+                                {f'{tag_name_formatted}[{y}]': v}, result_window.tree.invisibleRootItem())
                     else:
+                        
+                        tag_name_formatted = re.sub(pattern, '', tag_names[i])
+
                         result_window.add_to_tree(
-                            {tag_names[i]: value}, result_window.tree.invisibleRootItem())
+                            {tag_name_formatted: value}, result_window.tree.invisibleRootItem())
                 else:
                     result_window.print_results(f"Error: {read_result[i].error}", 'red')
                     
