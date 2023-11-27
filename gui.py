@@ -718,6 +718,7 @@ class Trender(QObject):
         self.single_tag = True
         self.plc = None
         self.tag_data = []
+        self.main_window = None
 
     def run(self):
         """
@@ -765,11 +766,16 @@ class Trender(QObject):
                     for tag, value in self.tag_data.items():
                         self.update.emit(f'{tag} = {value}', 'yellow')
                     self.results.append(result[0].value)
+                    self.main_window.add_to_tree(
+                        {formatted_tags[0]: result[0].value}, self.main_window.tree.invisibleRootItem())
                     self.update.emit('', 'white')
                 else:
                     for i, r in enumerate(result):
                         self.tag_data.append(crawl_and_format(r.value, formatted_tags[i], {}))
                         self.results[i].append(r.value)
+
+                    self.main_window.add_to_tree(
+                        {formatted_tags[i]: r.value}, self.main_window.tree.invisibleRootItem())
                         
                     for result in self.tag_data:
                         for tag, value in result.items():
@@ -851,6 +857,7 @@ class Monitorer(QObject):
         self.read_once = True
         self.read_time = None
         self.read_loop_enabled = False
+        self.main_window = None
 
     def run(self):
         """
@@ -888,6 +895,9 @@ class Monitorer(QObject):
                                           ] = tag_result.value
                                 self.update.emit(
                                     f'{self.read_write_tag_list[i]} = {tag_result.value}', 'yellow')
+                                
+                                self.main_window.add_to_tree(
+                                    {self.read_write_tag_list[i]: tag_result.value}, self.main_window.tree.invisibleRootItem())
                             
                             self.update.emit('', 'white')
                         else:
@@ -895,6 +905,9 @@ class Monitorer(QObject):
                                       ] = read_event_results.value
                             self.update.emit(
                                 f'{self.read_write_tag_list[0]} = {read_event_results.value}', 'yellow')
+                            
+                            self.main_window.add_to_tree(
+                                {self.read_write_tag_list[0]: read_event_results.value}, self.main_window.tree.invisibleRootItem())
                             
                         self.update.emit('', 'white')
 
@@ -907,6 +920,9 @@ class Monitorer(QObject):
             else:
                 try:
                     result = self.plc.read(self.tag)
+
+                    self.main_window.add_to_tree(
+                        {self.tag: result.value}, self.main_window.tree.invisibleRootItem())
 
                     if result.value == self.value and self.hold == False:
 
@@ -945,6 +961,9 @@ class Monitorer(QObject):
                                     self.update.emit(
                                         f'{self.read_write_tag_list[i]} = {tag_result.value}', 'yellow')
                                     
+                                    self.main_window.add_to_tree(
+                                        {self.read_write_tag_list[i]: tag_result.value}, self.main_window.tree.invisibleRootItem())
+                                    
                                 self.update.emit('', 'white')
                             else:
                                 yaml_temp[self.read_write_tag_list[0]
@@ -952,6 +971,9 @@ class Monitorer(QObject):
                                 self.update.emit(
                                     f'{self.read_write_tag_list[0]} = {read_event_results.value}', 'yellow')
                                 self.update.emit('', 'white')
+                                
+                                self.main_window.add_to_tree(
+                                    {self.read_write_tag_list[0]: read_event_results.value}, self.main_window.tree.invisibleRootItem())
 
                             if not self.read_once:
                                 self.read_loop_enabled = True
@@ -1773,6 +1795,7 @@ class MainWindow(QMainWindow):
                             self.trender.interval = (
                                 self.trend_rate.value() * 1000)
                             self.trender.plc = plc
+                            self.trender.main_window = self
                             self.trender.running = True
                             self.trend_thread.start()
                             self.trend_plot_button.setEnabled(True)
@@ -1837,6 +1860,7 @@ class MainWindow(QMainWindow):
                             self.monitorer.interval = (
                                 self.monitor_rate.value() * 1000)
                             self.monitorer.plc = plc
+                            self.monitorer.main_window = self
 
                             self.monitorer.read_once = self.event_oneshot.isChecked()
 
