@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QTreeWidget,
     QTreeWidgetItem,
+    QScrollArea,
 )
 from PySide6 import QtGui
 from PySide6.QtGui import QRegularExpressionValidator, QTextCursor
@@ -56,6 +57,7 @@ def connect_to_plc(ip, connect_button, main_window):
     if plc != None:
         plc.close()
         connect_button.setText("Connect")
+        main_window.menu_status.setText(f"Disconnected")
         plc = None
         main_window.stop_plc_connection_check()
         main_window.disable_buttons()
@@ -66,6 +68,8 @@ def connect_to_plc(ip, connect_button, main_window):
         if plc.connected:
             tag_types = get_tags_from_plc(plc)
             connect_button.setText("Disconnect")
+            plc.get_plc_name()
+            main_window.menu_status.setText(f"Connected to {plc.get_plc_name()} at {ip}")
 
         main_window.start_plc_connection_check()
         main_window.enable_buttons()
@@ -565,7 +569,26 @@ def plot_trend_data(tag, results, timestamps, single_tag):
         else:
             print('\n****** Can only plot elementary data types ******\n')
     else:
-        print('\n****** Cannot plot multiple tags yet ******\n')
+        fig, ax = plt.subplots(facecolor=(.18, .31, .31))
+        for i, result in enumerate(results):
+            plot, = ax.plot(timestamps, result, 'wo', markersize=2)
+        ax.set_xlabel('Time (msec)', color='w')
+        ax.set_ylabel('Value', color='w')
+        ax.set_title(f'{tag} Trend Results', color='w')
+        ax.tick_params(labelcolor='w', labelsize='medium', width=3)
+        ax.set_facecolor('k')
+        ax.grid()
+
+        min_val = min([min(result) for result in results])
+        max_val = max([max(result) for result in results])
+
+        range_val = max_val - min_val
+
+        spacing_val = range_val/30
+
+        ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
+
+        plt.show()
 
 
 def process_trend_data(tag, results, timestamps, single_tag, file_enabled, file_name, file_format):
@@ -724,6 +747,7 @@ class Trender(QObject):
         self.plc = None
         self.tag_data = []
         self.main_window = None
+        self.formatted_tags = None
 
     def run(self):
         """
@@ -736,7 +760,7 @@ class Trender(QObject):
         self.timestamps = []
 
         # Convert tag input to a list
-        formatted_tags = [t.strip() for t in self.tags.split(',')]
+        self.formatted_tags = [t.strip() for t in self.tags.split(',')]
 
         try:
             self.plc = plc
@@ -750,7 +774,7 @@ class Trender(QObject):
             self.tag_data = []
             
             try:
-                result = self.plc.read(*formatted_tags)
+                result = self.plc.read(*self.formatted_tags)
 
                 if not isinstance(result, list):
                     result = [result]
@@ -767,20 +791,20 @@ class Trender(QObject):
                     f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}<br>', 'white')
 
                 if self.single_tag:
-                    self.tag_data = crawl_and_format(result[0].value, formatted_tags[0], {})
+                    self.tag_data = crawl_and_format(result[0].value, self.formatted_tags[0], {})
                     for tag, value in self.tag_data.items():
                         self.update.emit(f'{tag} = {value}', 'yellow')
                     self.results.append(result[0].value)
                     self.main_window.add_to_tree(
-                        {formatted_tags[0]: result[0].value}, self.main_window.tree.invisibleRootItem())
+                        {self.formatted_tags[0]: result[0].value}, self.main_window.tree.invisibleRootItem())
                     self.update.emit('', 'white')
                 else:
                     for i, r in enumerate(result):
-                        self.tag_data.append(crawl_and_format(r.value, formatted_tags[i], {}))
+                        self.tag_data.append(crawl_and_format(r.value, self.formatted_tags[i], {}))
                         self.results[i].append(r.value)
 
                     self.main_window.add_to_tree(
-                        {formatted_tags[i]: r.value}, self.main_window.tree.invisibleRootItem())
+                        {self.formatted_tags[i]: r.value}, self.main_window.tree.invisibleRootItem())
                         
                     for result in self.tag_data:
                         for tag, value in result.items():
@@ -1046,10 +1070,87 @@ class AboutWindow(QWidget):
         self.setLayout(layout)
 
 
+class PlotWindow(QWidget):
+    """
+    This "window" is a QWidget. If it has no parent, it
+    will appear as a free-floating window as we want.
+    """
+
+    def __init__(self, tags, results, timestamps):
+        super().__init__()
+        self.setWindowTitle("Plot Configuration")
+        self.setMinimumWidth(400)
+
+        self.tags = tags
+        self.timestamps = timestamps
+
+        if not isinstance(self.tags, list):
+            self.tags = [self.tags]
+            self.results = [results]
+        else:
+            self.results = results
+        self.checkboxes = []
+
+        self.layout = QVBoxLayout()
+
+        self.desc_label = QLabel("Select the tags to plot")
+        self.note_label = QLabel("Note: Only elementary data types can be plotted")
+        self.plot_button = QPushButton("Plot")
+
+        self.layout.addWidget(self.desc_label)
+        self.layout.addWidget(self.note_label)
+
+        for tag in self.tags:
+            checkbox = QCheckBox(tag, self)
+
+            pattern = r'\[\d+\]'
+
+            tag_stripped = re.sub(pattern, '', tag)
+
+            if tag_types[tag_stripped]['data_type'] in ['DINT', 'INT', 'SINT', 'REAL', 'BOOL']:
+                checkbox.setEnabled(True)
+            else:
+                checkbox.setEnabled(False)
+
+            self.checkboxes.append(checkbox)
+            self.layout.addWidget(checkbox)
+        
+        self.layout.addWidget(self.plot_button)
+
+        self.plot_button.clicked.connect(self.get_checked_tags)
+        self.setLayout(self.layout)
+
+    def get_checked_tags(self):
+        checked_tags = []
+        results = []
+        timestamps = self.timestamps
+
+        for i, checkbox in enumerate(self.checkboxes):
+            if checkbox.isChecked():
+                checked_tags.append(self.tags[i])
+                results.append(self.results[i])
+                
+
+        print(checked_tags)
+        print(results)
+        print(timestamps)
+        if len(checked_tags) == 1:
+            plot_trend_data(checked_tags, results[0], timestamps, True)
+        else:
+            plot_trend_data(checked_tags, results, timestamps, False)
+
+        
+
+
 class MainWindow(QMainWindow):
     def show_about_window(self):
         if self.w is None:
             self.w = AboutWindow()
+        self.w.show()
+
+    def show_plot_window(self, tags, results, timestamps):
+        if self.w is None:
+            self.w = PlotWindow(tags, results, timestamps)
         self.w.show()
 
     def showConnectedDialog(self):
@@ -1084,8 +1185,14 @@ class MainWindow(QMainWindow):
 
         menubar = self.menuBar()
         menubar.addAction("About")
-        menubar.show()
+        self.menu_status = QLabel("Disconnected", self)
+        self.menu_status.setFixedWidth(500)
 
+        self.menu_status.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        menubar.setCornerWidget(self.menu_status, Qt.TopRightCorner)
+
+        menubar.show()
         # open AboutWindow when About is clicked
         menubar.triggered.connect(self.show_about_window)
 
@@ -1392,8 +1499,9 @@ class MainWindow(QMainWindow):
         self.write_button.clicked.connect(self.write_tag_button_clicked)
 
         self.trend_button.clicked.connect(self.trender_thread)
-        self.trend_plot_button.clicked.connect(lambda: plot_trend_data(
-            self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
+        #self.trend_plot_button.clicked.connect(lambda: plot_trend_data(
+        #    self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
+        self.trend_plot_button.clicked.connect(lambda: self.show_plot_window(self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
         self.monitor_button.clicked.connect(self.monitorer_thread)
         self.connect_button.clicked.connect(self.connect_button_clicked)
         self.file_browser.clicked.connect(
