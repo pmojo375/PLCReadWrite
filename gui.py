@@ -1,6 +1,6 @@
 import sys
-# from pycomm3 import LogixDriver
-from offline_read import LogixDriver
+from pycomm3 import LogixDriver
+#from offline_read import LogixDriver
 import qdarktheme
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QRegularExpression, QSettings
 from PySide6.QtWidgets import (
@@ -822,7 +822,7 @@ class Monitorer(QObject):
     - read_write_tag_list (list): a list of tags to read or write to
     """
 
-    update = Signal(str)
+    update = Signal(str, str)
     update_trend_data = Signal(list, list)
     finished = Signal()
 
@@ -866,7 +866,7 @@ class Monitorer(QObject):
             self.read_write_tag_list = [
                 t.strip() for t in self.tags_to_read_write.split(',')]
 
-        self.update.emit('Starting Monitor...')
+        self.update.emit('Starting Monitor...<br>', 'white')
 
         while self.running:
 
@@ -887,12 +887,16 @@ class Monitorer(QObject):
                                 yaml_temp[self.read_write_tag_list[i]
                                           ] = tag_result.value
                                 self.update.emit(
-                                    f'{self.read_write_tag_list[i]} = {tag_result.value}')
+                                    f'{self.read_write_tag_list[i]} = {tag_result.value}', 'yellow')
+                            
+                            self.update.emit('', 'white')
                         else:
                             yaml_temp[self.read_write_tag_list[0]
                                       ] = read_event_results.value
                             self.update.emit(
-                                f'{self.read_write_tag_list[0]} = {read_event_results.value}')
+                                f'{self.read_write_tag_list[0]} = {read_event_results.value}', 'yellow')
+                            
+                        self.update.emit('', 'white')
 
                         self.yaml_data.append(yaml_temp)
 
@@ -912,7 +916,7 @@ class Monitorer(QObject):
                         now = datetime.datetime.now()
 
                         self.update.emit(
-                            f'<br>Tag = {self.value} at Timestamp: {timestamp}')
+                            f'Tag = {self.value} at Timestamp: {timestamp}<br>', 'yellow')
 
                         yaml_temp['Timestamp'] = timestamp
 
@@ -924,7 +928,7 @@ class Monitorer(QObject):
                             time_since_last_event = (
                                 now - self.previous_timestamp).total_seconds() * 1000
                             self.update.emit(
-                                f'Time since last event: {time_since_last_event} ms')
+                                f'Time since last event: {time_since_last_event} ms<br>', 'white')
                             self.previous_timestamp = now
 
                             yaml_temp['Time Since Last Event'] = time_since_last_event
@@ -939,12 +943,15 @@ class Monitorer(QObject):
                                     yaml_temp[self.read_write_tag_list[i]
                                               ] = tag_result.value
                                     self.update.emit(
-                                        f'{self.read_write_tag_list[i]} = {tag_result.value}')
+                                        f'{self.read_write_tag_list[i]} = {tag_result.value}', 'yellow')
+                                    
+                                self.update.emit('', 'white')
                             else:
                                 yaml_temp[self.read_write_tag_list[0]
                                           ] = read_event_results.value
                                 self.update.emit(
-                                    f'{self.read_write_tag_list[0]} = {read_event_results.value}')
+                                    f'{self.read_write_tag_list[0]} = {read_event_results.value}', 'yellow')
+                                self.update.emit('', 'white')
 
                             if not self.read_once:
                                 self.read_loop_enabled = True
@@ -960,7 +967,7 @@ class Monitorer(QObject):
 
                             self.plc.write(*tag_write_data)
                             self.update.emit(
-                                f'Successfully wrote to tags: {self.tags_to_read_write}')
+                                f'Successfully wrote to tags: {self.tags_to_read_write}<br>', 'white')
 
                         self.yaml_data.append(yaml_temp)
 
@@ -1234,6 +1241,7 @@ class MainWindow(QMainWindow):
 
         # Set parameters
         self.monitor_rate.setRange(0.1, 60)
+        self.event_oneshot.setChecked(True)
         self.event_oneshot.setDisabled(True)
         self.event_timed.setDisabled(True)
         self.monitor_rate.setValue(1)
@@ -1483,7 +1491,7 @@ class MainWindow(QMainWindow):
         self.event_oneshot.setEnabled(False)
         self.event_timed.setEnabled(False)
         self.event_radio_group.setExclusive(False)
-        self.event_oneshot.setChecked(False)
+        self.event_oneshot.setChecked(True)
         self.event_timed.setChecked(False)
         self.event_radio_group.setExclusive(True)
 
@@ -1508,7 +1516,7 @@ class MainWindow(QMainWindow):
             self.event_oneshot.setEnabled(False)
             self.event_radio_group.setExclusive(False)
             self.event_timed.setChecked(False)
-            self.event_oneshot.setChecked(False)
+            self.event_oneshot.setChecked(True)
             self.event_radio_group.setExclusive(True)
 
     def handle_list_selection_changed(self):
