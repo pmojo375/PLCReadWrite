@@ -1394,6 +1394,7 @@ class MainWindow(QMainWindow):
         self.tree_label = QLabel("Read History")
         self.clear_results_button = QPushButton("Clear Results")
         self.save_tree_button = QPushButton("Save History To File")
+        self.clear_tree_button = QPushButton("Clear History")
         # Set parameters
         self.tag_input.setPlaceholderText("Tag1, Tag2...")
         self.file_name.setPlaceholderText("File Name")
@@ -1428,6 +1429,7 @@ class MainWindow(QMainWindow):
         results_layout.addWidget(self.results)
         history_label_layout.addWidget(self.tree_label)
         history_label_layout.addWidget(self.save_tree_button)
+        history_label_layout.addWidget(self.clear_tree_button)
         results_layout.addLayout(history_label_layout)
         results_layout.addWidget(self.tree)
 
@@ -1525,6 +1527,7 @@ class MainWindow(QMainWindow):
         self.event_oneshot.toggled.connect(self.monitor_read_one_shot_selected)
         self.clear_results_button.clicked.connect(self.clear_results)
         self.save_tree_button.clicked.connect(self.save_tree_to_file)
+        self.clear_tree_button.clicked.connect(self.clear_tree)
 
         # Load stored data if available
         self.ip_input.setText(self.settings.value('ip', ''))
@@ -1555,6 +1558,8 @@ class MainWindow(QMainWindow):
 
                 write_to_csv([flatten_dict(tree_dict)], file_name[0])
 
+    def clear_tree(self):
+        self.tree.clear()
 
     def add_to_tree(self, data, parent):
         if parent.childCount() > 0:
