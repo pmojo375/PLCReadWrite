@@ -1228,6 +1228,7 @@ class MainWindow(QMainWindow):
         entry_layout = QVBoxLayout()
         results_layout = QVBoxLayout()
         results_label_layout = QHBoxLayout()
+        history_label_layout = QHBoxLayout()
         results_layout.addWidget(container)
         ip_layout = QHBoxLayout()
         read_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
@@ -1392,7 +1393,7 @@ class MainWindow(QMainWindow):
         self.file_format = 0
         self.tree_label = QLabel("Read History")
         self.clear_results_button = QPushButton("Clear Results")
-
+        self.save_tree_button = QPushButton("Save History To File")
         # Set parameters
         self.tag_input.setPlaceholderText("Tag1, Tag2...")
         self.file_name.setPlaceholderText("File Name")
@@ -1425,7 +1426,9 @@ class MainWindow(QMainWindow):
         results_label_layout.addWidget(self.clear_results_button)
         results_layout.addLayout(results_label_layout)
         results_layout.addWidget(self.results)
-        results_layout.addWidget(self.tree_label)
+        history_label_layout.addWidget(self.tree_label)
+        history_label_layout.addWidget(self.save_tree_button)
+        results_layout.addLayout(history_label_layout)
         results_layout.addWidget(self.tree)
 
         self.tag_read_history = {}
@@ -1521,16 +1524,37 @@ class MainWindow(QMainWindow):
         self.event_timed.toggled.connect(self.monitor_read_set_time_selected)
         self.event_oneshot.toggled.connect(self.monitor_read_one_shot_selected)
         self.clear_results_button.clicked.connect(self.clear_results)
+        self.save_tree_button.clicked.connect(self.save_tree_to_file)
 
         # Load stored data if available
         self.ip_input.setText(self.settings.value('ip', ''))
         self.tag_input.setText(self.settings.value('tag', ''))
         self.populate_list_from_history()
 
-        self.tree_data = {}
+    def get_data_from_tree(self, parent):
+        data = {}
+        for i in range(parent.childCount()):
+            child = parent.child(i)
+            if child.childCount() > 0:
+                data[child.text(0)] = self.get_data_from_tree(child)
+            else:
+                data[child.text(0)] = child.text(1)
+        return data
 
     def clear_results(self):
         self.results.clear()
+
+    def save_tree_to_file(self):
+        file_name = QFileDialog.getSaveFileName(self, 'Save File', '', 'YAML (*.yaml);;CSV (*.csv)')
+        if file_name[0] != '':
+            if file_name[1] == 'YAML (*.yaml)':
+                with open(file_name[0], 'w') as file:
+                    yaml.dump(self.get_data_from_tree(self.tree.invisibleRootItem()), file)
+            elif file_name[1] == 'CSV (*.csv)':
+                tree_dict = self.get_data_from_tree(self.tree.invisibleRootItem())
+
+                write_to_csv([flatten_dict(tree_dict)], file_name[0])
+
 
     def add_to_tree(self, data, parent):
         if parent.childCount() > 0:
