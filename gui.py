@@ -540,7 +540,12 @@ def write_tag(tags, values, main_window, plc, **kwargs):
         except Exception as e:
             print(f"Error in write_tag: {e}")
             return None
-
+        
+import sys
+from PySide6.QtCore import QPointF
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import QMainWindow, QApplication
+from PySide6.QtCharts import QChart, QChartView, QLineSeries
 
 def plot_trend_data(tag, results, timestamps, single_tag):
 
@@ -783,8 +788,8 @@ class Trender(QObject):
                     if len(result) > 1:
                         self.single_tag = False
 
-                        for i in range(len(result)):
-                            self.results.append([])
+                    for i in range(len(result)):
+                        self.results.append([])
 
                     self.first_pass = False
                 self.update.emit(
@@ -794,7 +799,7 @@ class Trender(QObject):
                     self.tag_data = crawl_and_format(result[0].value, self.formatted_tags[0], {})
                     for tag, value in self.tag_data.items():
                         self.update.emit(f'{tag} = {value}', 'yellow')
-                    self.results.append(result[0].value)
+                    self.results[0].append(result[0].value)
                     self.main_window.add_to_tree(
                         {self.formatted_tags[0]: result[0].value}, self.main_window.tree.invisibleRootItem())
                     self.update.emit('', 'white')
@@ -1139,10 +1144,60 @@ class PlotWindow(QWidget):
         else:
             plot_trend_data(checked_tags, results, timestamps, False)
 
-        
+class TestChart(QMainWindow):
+    def __init__(self, tags, results, timestamps):
+        super().__init__()
+
+        self.chart = QChart()
+
+        min = 99999999999
+        max = 0
+
+        for i, tag in enumerate(tags):
+            self.series = QLineSeries()
+            self.series.setName(tag)
+            self.series.setPointsVisible(True)
+            for x, result in enumerate(results[i]):
+                if result < min:
+                    min = result
+                
+                if result > max:
+                    max = result
+                
+                self.series.append(timestamps[x], result)
+
+            self.chart.addSeries(self.series)
+
+        self.chart.createDefaultAxes()
+        self.chart.axisX().setTitleText("Time (msec)")
+        self.chart.axisY().setTitleText("Value")
+
+        # get the max and min values of the y axis
+        chart_y_max = self.chart.axisY().max()
+        chart_y_min = self.chart.axisY().min()
+        chart_y_axis_diff = chart_y_max - chart_y_min
+        chart_addition = chart_y_axis_diff * .05
+
+        # increase the y axis slightly in both directions
+        self.chart.axisY().setRange(min - (min * chart_addition), max + (max * chart_addition))
+        self.chart.legend().setVisible(True)
+        self.chart.setTitle("Tag Plot")
+
+        self._chart_view = QChartView(self.chart)
+        self._chart_view.setRenderHint(QPainter.Antialiasing)
+
+        self.setCentralWidget(self._chart_view)
 
 
 class MainWindow(QMainWindow):
+
+    def show_chart_window(self, tags, results, timestamps):
+
+        self.w = TestChart(tags, results, timestamps)
+        self.w.setWindowTitle("Trend Chart")
+        self.w.resize(600, 600)
+        self.w.show()
+        
     def show_about_window(self):
         if self.w is None:
             self.w = AboutWindow()
@@ -1506,7 +1561,8 @@ class MainWindow(QMainWindow):
         self.trend_button.clicked.connect(self.trender_thread)
         #self.trend_plot_button.clicked.connect(lambda: plot_trend_data(
         #    self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
-        self.trend_plot_button.clicked.connect(lambda: self.show_plot_window(self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
+        #self.trend_plot_button.clicked.connect(lambda: self.show_plot_window(self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
+        self.trend_plot_button.clicked.connect(lambda: self.show_chart_window(self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
         self.monitor_button.clicked.connect(self.monitorer_thread)
         self.connect_button.clicked.connect(self.connect_button_clicked)
         self.file_browser.clicked.connect(
