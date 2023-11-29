@@ -1193,20 +1193,20 @@ class MainWindow(QMainWindow):
 
     def show_chart_window(self, tags, results, timestamps):
 
-        self.w = TestChart(tags, results, timestamps)
-        self.w.setWindowTitle("Trend Chart")
-        self.w.resize(600, 600)
-        self.w.show()
+        self.chart_window = TestChart(tags, results, timestamps)
+        self.chart_window.setWindowTitle("Trend Chart")
+        self.chart_window.resize(600, 600)
+        self.chart_window.show()
         
     def show_about_window(self):
-        if self.w is None:
-            self.w = AboutWindow()
-        self.w.show()
+        if self.about_window is None:
+            self.about_window = AboutWindow()
+        self.about_window.show()
 
     def show_plot_window(self, tags, results, timestamps):
-        if self.w is None:
-            self.w = PlotWindow(tags, results, timestamps)
-        self.w.show()
+        if self.plot_window is None:
+            self.plot_window = PlotWindow(tags, results, timestamps)
+        self.plot_window.show()
 
     def showConnectedDialog(self):
         msgBox = QMessageBox()
@@ -1235,21 +1235,25 @@ class MainWindow(QMainWindow):
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels(['Tag', 'Value'])
 
-        self.w = None
+        self.about_window = None
+        self.chart_window = None
+        self.plot_window = None
         self.setWindowTitle("PLC Read/Write")
 
-        menubar = self.menuBar()
-        menubar.addAction("About")
+        self.menubar = self.menuBar()
+        self.menubar.addAction("About")
         self.menu_status = QLabel("Disconnected", self)
         self.menu_status.setFixedWidth(500)
 
         self.menu_status.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        menubar.setCornerWidget(self.menu_status, Qt.TopRightCorner)
+        self.menubar.setCornerWidget(self.menu_status, Qt.TopRightCorner)
 
-        menubar.show()
+        self.menubar.show()
+
         # open AboutWindow when About is clicked
-        menubar.triggered.connect(self.show_about_window)
+        self.menubar.triggered.connect(self.show_about_window)
+        
 
         # Create timer for checking PLC connection
         self.plc_connection_check_timer = QTimer()
