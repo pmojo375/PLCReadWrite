@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QTreeWidget,
     QTreeWidgetItem,
     QScrollArea,
+    QTextBrowser,
 )
 from PySide6 import QtGui
 from PySide6.QtGui import QRegularExpressionValidator, QTextCursor
@@ -1057,10 +1058,10 @@ class AboutWindow(QWidget):
         self.version_label = QLabel("Version 1.0")
         self.author_label = QLabel("Created by: Parker Mojsiejenko")
         self.description_label = QLabel(
-            "This project is a utility for reading and writing tags from Allen-Bradley PLCs. It can read and write from YAML files as well a convert the read file to CSV if desired. In addition to that it can trend tags and monitor tags for changes and write to them when they change.")
+            "This app is a bridge between you Allen Bradley PLC and your PC. It has many features including reading and writing tags, trending tags, and monitoring tags for changes. It can also read and write to files in YAML and CSV format.")
         self.description_label.setWordWrap(True)
         self.about_label = QLabel(
-            "This project relies on the pycomm3 library made by ottowayi for communicating with Allen-Bradley PLCs.")
+            "This project relies on the pycomm3 library made by ottowayi for communicating with Allen-Bradley PLCs and would not be possible without it.")
         self.name_label.setAlignment(Qt.AlignCenter)
         self.version_label.setAlignment(Qt.AlignCenter)
         self.author_label.setAlignment(Qt.AlignCenter)
@@ -1074,6 +1075,57 @@ class AboutWindow(QWidget):
         layout.addWidget(self.description_label)
         self.setLayout(layout)
 
+
+class HelpWindow(QWidget):
+    """
+    This "window" is a QWidget. If it has no parent, it
+    will appear as a free-floating window as we want.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Help")
+
+        layout = QVBoxLayout()
+
+        self.text_browser = QTextBrowser()
+        text = '<h1>PLC Tag Utility Help</h1>\
+            <p>This app is a bridge between your Allen Bradley PLC and PC. It can read tags, write to tags, trend tags, and monitor tags for changes with the ability to read and write tags when the monitored tag reads a set value.</p>\
+            <h2>Getting Started</h2>\
+            <p>First, you need to connect to your PLC. To do this, enter your IP address and click the "Connect" button in the top left corner of the app.</p>\
+            <h2>General Infomation</h2>\
+            <p>When entering tags to interface with, you may enter more than one but they must be seperated by a comma. If the tag is an array, you can read the entire array or a portion of it if you format the tag correctly.</p>\
+            <ul>\
+            <li>Tag_Name[Index] - Reads the tag at the specified index</li>\
+            <li>Tag_Name[starting position]{{number of tags to read in array}} - Reads the specified number of tags starting at the specified index</li>\
+            <li>Tag_Name.Child_Tag - Reads just the UDTs child tag</li>\
+            </ul>\
+            <p>If you omit the [Index] or {{number of tags to read in array}} from an array tag. The index will be assumed to be [0] and the number of tags to read will be assumed to be 1 only.</p>\
+            <p>When writing to multiple tags, you must also seperate the values with commas.</p>\
+            <h2>Reading and Writing to Files</h2>\
+            <p>Tag results can be stored in a YAML or CSV file if you select the "Store To File" checkbox. The format in the drop down to the right of this is the file format it will be saved in.</p>\
+            <p>When reading from a file, the file must be in YAML or CSV format and the format must be selected in the drop down to the right of the "Read From File" checkbox. A good way to ensure you have the file formatted correctly is to first read the tags and store the results to a file and then edit that file with your changes. This ensures that there are no issues with the formatting when reading from it.</p>\
+            <h2>Trending Tags</h2>\
+            <p>To trend tags, enter the tags you want to trend in the "Tags" field and click the "Trend" button. During or after the trend, you can look at a plot of the values by clicking "Show Trend Plot". This will open a window where you can select the tags to trend if you have more then one. The results will be stored to a file if the option is selected.</p>\
+            <h2>Monitoring Tags</h2>\
+            <p>Monitoring tags is a good way to watch for a tag to be a certain value. Enter the tag to moniotor and the value to look for and when the tag reads equals your value, the timestamp will be logged.</p>\
+            <p>When the tag equals your inputted value, you can enable an option to read or write to other tags. This can be helpful if you want to monitor for a certain fault bit to be high and then reset it by writing a 0 to the tag or get the values of other tags. You can read tags once or for a time period after the monitor event triggers.</p>\
+            <h2>Notes</h2>\
+            <p>This app was developed as a side project and there will be bugs from time to time. If you find a bug, please report it to me so I can fix it. I am also open to suggestions for new features.</p>\
+            <p>Thanks for using my app!</p>'\
+        
+        
+        self.text_browser.setOpenExternalLinks(True)
+        self.text_browser.setHtml(text)
+
+        #self.text_browser.setLineWrapMode(QTextEdit.NoWrap)
+        self.text_browser.setReadOnly(True)
+        self.text_browser.setAlignment(Qt.AlignCenter)
+
+
+
+        layout.addWidget(self.text_browser)
+        self.setLayout(layout)
 
 class PlotWindow(QWidget):
     """
@@ -1203,6 +1255,13 @@ class MainWindow(QMainWindow):
             self.about_window = AboutWindow()
         self.about_window.show()
 
+    def show_help_window(self):
+        if self.help_window is None:
+            self.help_window = HelpWindow()
+            self.help_window.setWindowTitle("Help")
+            self.help_window.resize(600, 600)
+        self.help_window.show()
+
     def show_plot_window(self, tags, results, timestamps):
         if self.plot_window is None:
             self.plot_window = PlotWindow(tags, results, timestamps)
@@ -1238,10 +1297,12 @@ class MainWindow(QMainWindow):
         self.about_window = None
         self.chart_window = None
         self.plot_window = None
+        self.help_window = None
         self.setWindowTitle("PLC Read/Write")
 
         self.menubar = self.menuBar()
         self.menubar.addAction("About")
+        self.menubar.addAction("Help")
         self.menu_status = QLabel("Disconnected", self)
         self.menu_status.setFixedWidth(500)
 
@@ -1251,8 +1312,10 @@ class MainWindow(QMainWindow):
 
         self.menubar.show()
 
-        # open AboutWindow when About is clicked
-        self.menubar.triggered.connect(self.show_about_window)
+        # open about window and help window when their respective actions are triggered
+        self.menubar.actions()[0].triggered.connect(self.show_about_window)
+        self.menubar.actions()[1].triggered.connect(self.show_help_window)
+
         
 
         # Create timer for checking PLC connection
@@ -1314,8 +1377,8 @@ class MainWindow(QMainWindow):
         # Create widgets
         self.read_button = QPushButton("Read")
         self.read_List_button = QPushButton("Read Tags In List")
-        self.remove_tag_button = QPushButton("Remove Tag")
-        self.add_tag_button = QPushButton("Add Tag")
+        self.remove_tag_button = QPushButton("Remove Tag From List")
+        self.add_tag_button = QPushButton("Add Tag To List")
         self.tags_to_read_list = QListView()
         model = QtGui.QStandardItemModel()
 
