@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QCompleter,
     QSplashScreen,
+    QGroupBox,
 )
 from PySide6 import QtGui
 from PySide6.QtGui import QRegularExpressionValidator, QTextCursor, QPixmap
@@ -1140,8 +1141,6 @@ class PlotWindow(QWidget):
 
     def __init__(self, tags, results, timestamps):
         super().__init__()
-        self.setWindowTitle("Plot Configuration")
-        self.setMinimumWidth(400)
 
         self.tags = tags
         self.timestamps = timestamps
@@ -1154,13 +1153,10 @@ class PlotWindow(QWidget):
         self.checkboxes = []
 
         self.layout = QVBoxLayout()
-
-        self.desc_label = QLabel("Select the tags to plot")
-        self.note_label = QLabel("Note: Only elementary data types can be plotted")
+        self.group_box = QGroupBox("Tags")
+        self.group_box.setLayout(QVBoxLayout())
+        
         self.plot_button = QPushButton("Plot")
-
-        self.layout.addWidget(self.desc_label)
-        self.layout.addWidget(self.note_label)
 
         for tag in self.tags:
             checkbox = QCheckBox(tag, self)
@@ -1175,12 +1171,21 @@ class PlotWindow(QWidget):
                 checkbox.setEnabled(False)
 
             self.checkboxes.append(checkbox)
-            self.layout.addWidget(checkbox)
+            self.group_box.layout().addWidget(checkbox)
+            #self.layout.addWidget(checkbox)
         
+        self.layout.addWidget(self.group_box)
         self.layout.addWidget(self.plot_button)
 
         self.plot_button.clicked.connect(self.get_checked_tags)
         self.setLayout(self.layout)
+
+    def show_chart_window(self, tags, results, timestamps):
+
+        self.chart_window = TrendChart(tags, results, timestamps)
+        self.chart_window.setWindowTitle("Trend Chart")
+        self.chart_window.resize(600, 600)
+        self.chart_window.show()
 
     def get_checked_tags(self):
         checked_tags = []
@@ -1191,21 +1196,26 @@ class PlotWindow(QWidget):
             if checkbox.isChecked():
                 checked_tags.append(self.tags[i])
                 results.append(self.results[i])
-                
 
-        print(checked_tags)
-        print(results)
-        print(timestamps)
-        if len(checked_tags) == 1:
-            plot_trend_data(checked_tags, results[0], timestamps, True)
-        else:
-            plot_trend_data(checked_tags, results, timestamps, False)
+        if len(checked_tags) == 0:
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Information)
+            msgBox.setText("No tags selected!")
+            msgBox.setWindowTitle("Error")
+            msgBox.setStandardButtons(QMessageBox.Ok)
 
-class TestChart(QMainWindow):
+            returnValue = msgBox.exec()
+        else:     
+            self.show_chart_window(checked_tags, results, timestamps)
+
+
+
+class TrendChart(QMainWindow):
     def __init__(self, tags, results, timestamps):
         super().__init__()
 
         self.chart = QChart()
+        self.chart.setTheme(QChart.ChartThemeQt)
 
         min = 99999999999
         max = 0
@@ -1248,9 +1258,9 @@ class TestChart(QMainWindow):
 
 class MainWindow(QMainWindow):
 
+    # TODO - Skip the checkbox window when only one tag trended
     def show_chart_window(self, tags, results, timestamps):
-
-        self.chart_window = TestChart(tags, results, timestamps)
+        self.chart_window = TrendChart(tags, results, timestamps)
         self.chart_window.setWindowTitle("Trend Chart")
         self.chart_window.resize(600, 600)
         self.chart_window.show()
@@ -1267,10 +1277,11 @@ class MainWindow(QMainWindow):
             self.help_window.resize(600, 600)
         self.help_window.show()
 
-    def show_plot_window(self, tags, results, timestamps):
-        if self.plot_window is None:
-            self.plot_window = PlotWindow(tags, results, timestamps)
-        self.plot_window.show()
+    def show_plot_setup_window(self, tags, results, timestamps):
+        self.plot_setup_window = PlotWindow(tags, results, timestamps)
+        self.plot_setup_window.setWindowTitle("Select Tags To Plot")
+        self.plot_setup_window.setFixedWidth(400)
+        self.plot_setup_window.show()
 
     def showConnectedDialog(self):
         msgBox = QMessageBox()
@@ -1631,10 +1642,7 @@ class MainWindow(QMainWindow):
         self.write_button.clicked.connect(self.write_tag_button_clicked)
 
         self.trend_button.clicked.connect(self.trender_thread)
-        #self.trend_plot_button.clicked.connect(lambda: plot_trend_data(
-        #    self.trender.tags, self.trender_results, self.trender_timestamps, self.trender.single_tag))
-        #self.trend_plot_button.clicked.connect(lambda: self.show_plot_window(self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
-        self.trend_plot_button.clicked.connect(lambda: self.show_chart_window(self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
+        self.trend_plot_button.clicked.connect(lambda: self.show_plot_setup_window(self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
         self.monitor_button.clicked.connect(self.monitorer_thread)
         self.connect_button.clicked.connect(self.connect_button_clicked)
         self.file_browser.clicked.connect(
@@ -1665,6 +1673,7 @@ class MainWindow(QMainWindow):
     def set_autocomplete(self):
         self.completer = QCompleter(tag_types.keys(), self)
         self.completer.setCaseSensitivity(Qt.CaseSensitive)
+        self.completer.setCompletionMode(QCompleter.InlineCompletion)
         self.tag_input.setCompleter(self.completer)
 
 
