@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QTreeWidget,
     QTreeWidgetItem,
     QTextBrowser,
+    QCompleter,
     QSplashScreen,
 )
 from PySide6 import QtGui
@@ -69,6 +70,8 @@ def connect_to_plc(ip, connect_button, main_window):
 
         if plc.connected:
             tag_types = get_tags_from_plc(plc)
+            
+            main_window.set_autocomplete()
             connect_button.setText("Disconnect")
             plc.get_plc_name()
             main_window.menu_status.setText(f"Connected to {plc.get_plc_name()} at {ip}")
@@ -384,6 +387,7 @@ def get_tags_from_plc(plc):
                 # Recursively store children
                 tag_list = extract_child_data_types(
                     tag_data_type['internal_tags'], tag_list, tag_name, tag_dimensions)
+                
 
         return tag_list
     except Exception as e:
@@ -1657,6 +1661,12 @@ class MainWindow(QMainWindow):
         self.ip_input.setText(self.settings.value('ip', ''))
         self.tag_input.setText(self.settings.value('tag', ''))
         self.populate_list_from_history()
+
+    def set_autocomplete(self):
+        self.completer = QCompleter(tag_types.keys(), self)
+        self.completer.setCaseSensitivity(Qt.CaseSensitive)
+        self.tag_input.setCompleter(self.completer)
+
 
     def get_data_from_tree(self, parent):
         data = {}
