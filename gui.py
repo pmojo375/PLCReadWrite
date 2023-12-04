@@ -1,4 +1,5 @@
 import sys
+import time
 from pycomm3 import LogixDriver
 #from offline_read import LogixDriver
 import qdarktheme
@@ -25,11 +26,11 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QTreeWidget,
     QTreeWidgetItem,
-    QScrollArea,
     QTextBrowser,
+    QSplashScreen,
 )
 from PySide6 import QtGui
-from PySide6.QtGui import QRegularExpressionValidator, QTextCursor
+from PySide6.QtGui import QRegularExpressionValidator, QTextCursor, QPixmap
 import yaml
 import re
 import datetime
@@ -2115,10 +2116,17 @@ class MainWindow(QMainWindow):
 
 
 app = QApplication(sys.argv)
+pixmap = QPixmap("splash.jpg")
+splash = QSplashScreen(pixmap, Qt.WindowStaysOnTopHint)
+splash.setMask(pixmap.mask())
+splash.show()
+app.processEvents()
+time.sleep(2)
 app.setWindowIcon(QtGui.QIcon('icon.ico'))
 qdarktheme.setup_theme()
 window = MainWindow()
 window.resize(1000, 600)
 window.show()
+splash.finish(window)
 
 app.exec()
