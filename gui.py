@@ -2,8 +2,9 @@ import sys
 import time
 from pycomm3 import LogixDriver
 #from offline_read import LogixDriver
+from PySide6.QtCharts import QChart, QChartView, QLineSeries
 import qdarktheme
-from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QRegularExpression, QSettings
+from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QRegularExpression, QSettings, QPointF
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -29,10 +30,12 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QCompleter,
     QSplashScreen,
+    QToolTip,
     QGroupBox,
+    QGraphicsTextItem,
 )
 from PySide6 import QtGui
-from PySide6.QtGui import QRegularExpressionValidator, QTextCursor, QPixmap
+from PySide6.QtGui import QRegularExpressionValidator, QTextCursor, QPixmap, QMouseEvent, QPainter
 import yaml
 import re
 import datetime
@@ -547,61 +550,6 @@ def write_tag(tags, values, main_window, plc, **kwargs):
         except Exception as e:
             print(f"Error in write_tag: {e}")
             return None
-        
-import sys
-from PySide6.QtCore import QPointF
-from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import QMainWindow, QApplication
-from PySide6.QtCharts import QChart, QChartView, QLineSeries
-
-def plot_trend_data(tag, results, timestamps, single_tag):
-
-    if single_tag:
-        # ensure tag is an elementary data type
-        if type(results[0]) != dict:
-            fig, ax = plt.subplots(facecolor=(.18, .31, .31))
-            plot, = ax.plot(timestamps, results, 'wo', markersize=2)
-            ax.set_xlabel('Time (msec)', color='w')
-            ax.set_ylabel('Value', color='w')
-            ax.set_title(f'{tag} Trend Results', color='w')
-            ax.tick_params(labelcolor='w', labelsize='medium', width=3)
-            ax.set_facecolor('k')
-            ax.grid()
-
-            min_val = min(results)
-            max_val = max(results)
-
-            range_val = max_val - min_val
-
-            spacing_val = range_val/30
-
-            ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
-
-            plt.show()
-        else:
-            print('\n****** Can only plot elementary data types ******\n')
-    else:
-        fig, ax = plt.subplots(facecolor=(.18, .31, .31))
-        for i, result in enumerate(results):
-            plot, = ax.plot(timestamps, result, 'wo', markersize=2)
-        ax.set_xlabel('Time (msec)', color='w')
-        ax.set_ylabel('Value', color='w')
-        ax.set_title(f'{tag} Trend Results', color='w')
-        ax.tick_params(labelcolor='w', labelsize='medium', width=3)
-        ax.set_facecolor('k')
-        ax.grid()
-
-        min_val = min([min(result) for result in results])
-        max_val = max([max(result) for result in results])
-
-        range_val = max_val - min_val
-
-        spacing_val = range_val/30
-
-        ax.set_ylim(min_val - spacing_val, max_val + spacing_val)
-
-        plt.show()
-
 
 def process_trend_data(tag, results, timestamps, single_tag, file_enabled, file_name, file_format):
     """
@@ -1139,11 +1087,12 @@ class PlotWindow(QWidget):
     will appear as a free-floating window as we want.
     """
 
-    def __init__(self, tags, results, timestamps):
+    def __init__(self, tags, results, timestamps, main_window):
         super().__init__()
 
         self.tags = tags
         self.timestamps = timestamps
+        self.main_window = main_window
 
         if not isinstance(self.tags, list):
             self.tags = [self.tags]
@@ -1181,11 +1130,7 @@ class PlotWindow(QWidget):
         self.setLayout(self.layout)
 
     def show_chart_window(self, tags, results, timestamps):
-
-        self.chart_window = TrendChart(tags, results, timestamps)
-        self.chart_window.setWindowTitle("Trend Chart")
-        self.chart_window.resize(600, 600)
-        self.chart_window.show()
+        self.main_window.show_chart_window(tags, results, timestamps)
 
     def get_checked_tags(self):
         checked_tags = []
@@ -1208,14 +1153,47 @@ class PlotWindow(QWidget):
         else:     
             self.show_chart_window(checked_tags, results, timestamps)
 
+class ToolTip(QGraphicsTextItem):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setPlainText("")
 
+    def updateText(self, point):
+        self.setPlainText(f"{point.x()}: {point.y()}")
+        self.setVisibile(True)
+                          
+class CustomChartView(QChartView):
+    def __init__(self, chart, parent=None):
+        super().__init__(chart, parent)
+        self.tooltip = ToolTip()
+        chart.scene().addItem(self.tooltip)
+        self.tooltip.hide()
+    
+    def mouseMoveEvent(self, event: QMouseEvent):
+        chart_pos = self.chart().mapToValue(event.position())
+
+        for series in self.chart().series():
+            for i in range(series.count()):
+                point = series.at(i)
+
+                dx = point.x() - chart_pos.x()
+                dy = point.y() - chart_pos.y()
+                distance = (dx**2 + dy**2)**0.5
+                if distance < 2:
+                    self.tooltip.setPos(event.position().x(), event.position().y())
+                    self.tooltip.updateText(point)
+                    return
+        self.tooltip.hide()
+        super().mouseMoveEvent(event)
 
 class TrendChart(QMainWindow):
     def __init__(self, tags, results, timestamps):
         super().__init__()
 
+
         self.chart = QChart()
-        self.chart.setTheme(QChart.ChartThemeQt)
+        self.chart.setTheme(QChart.ChartThemeDark)
+        self.series_list = []
 
         min = 99999999999
         max = 0
@@ -1233,24 +1211,26 @@ class TrendChart(QMainWindow):
                 
                 self.series.append(timestamps[x], result)
 
+            self.series_list.append(self.series)
+
             self.chart.addSeries(self.series)
 
         self.chart.createDefaultAxes()
-        self.chart.axisX().setTitleText("Time (msec)")
-        self.chart.axisY().setTitleText("Value")
+        self.x_axis = self.chart.axes()[0]
+        self.y_axis = self.chart.axes()[1]
+        self.x_axis.setTitleText("Time (msec)")
+        self.y_axis.setTitleText("Value")
 
-        # get the max and min values of the y axis
-        chart_y_max = self.chart.axisY().max()
-        chart_y_min = self.chart.axisY().min()
-        chart_y_axis_diff = chart_y_max - chart_y_min
-        chart_addition = chart_y_axis_diff * .05
+        chart_addition = (max - min) * .05
 
-        # increase the y axis slightly in both directions
-        self.chart.axisY().setRange(min - (min * chart_addition), max + (max * chart_addition))
+        if len(self.series_list) > 1:
+            # increase the y axis slightly in both directions
+            self.y_axis.setMin(min - chart_addition)
+            self.y_axis.setMax(max + chart_addition)
         self.chart.legend().setVisible(True)
         self.chart.setTitle("Tag Plot")
 
-        self._chart_view = QChartView(self.chart)
+        self._chart_view = CustomChartView(self.chart)
         self._chart_view.setRenderHint(QPainter.Antialiasing)
 
         self.setCentralWidget(self._chart_view)
@@ -1263,6 +1243,7 @@ class MainWindow(QMainWindow):
         self.chart_window = TrendChart(tags, results, timestamps)
         self.chart_window.setWindowTitle("Trend Chart")
         self.chart_window.resize(600, 600)
+        self.plot_setup_window.close()
         self.chart_window.show()
         
     def show_about_window(self):
@@ -1278,7 +1259,7 @@ class MainWindow(QMainWindow):
         self.help_window.show()
 
     def show_plot_setup_window(self, tags, results, timestamps):
-        self.plot_setup_window = PlotWindow(tags, results, timestamps)
+        self.plot_setup_window = PlotWindow(tags, results, timestamps, self)
         self.plot_setup_window.setWindowTitle("Select Tags To Plot")
         self.plot_setup_window.setFixedWidth(400)
         self.plot_setup_window.show()
