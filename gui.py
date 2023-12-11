@@ -449,6 +449,7 @@ def set_data_type(value, tag):
         if tag in tag_types:
             # Get the data type from the tag_list
             type = tag_types[tag]['data_type']
+            type = tag_types[tag]['dimensions']
 
             # Set the data type based on the type from the tag_list
             if type == 'STRING':
@@ -466,6 +467,12 @@ def set_data_type(value, tag):
                     return True
                 else:
                     return False
+            else:
+                try:
+                    return eval(value)
+                except:
+                    raise ValueError(
+                        f"Error in set_data_type: Could not convert value {value} to type {type}")
         else:
             # If the tag is not in the tag_list, determine the data type based on the value
             if not value:
@@ -536,8 +543,11 @@ def write_tag(tags, values, main_window, plc, **kwargs):
             write_data.append((tag, set_data_type(values[i], tag)))
 
         try:
-            if plc.write(*write_data):
-                main_window.print_results(f"Successfully wrote to tags to PLC")
+            write_result = plc.write(*write_data)
+            if write_result:
+                main_window.print_results(f"Successfully wrote to tags to PLC<br>")
+            else:
+                main_window.print_results(f'{write_result.error}<br>', 'red')
         except Exception as e:
             print(f"Error in write_tag: {e}")
             return None
@@ -548,8 +558,11 @@ def write_tag(tags, values, main_window, plc, **kwargs):
             tags = process_csv_read(file_name)
 
         try:
-            if plc.write(*tags):
-                main_window.print_results(f"Successfully wrote to tags to PLC")
+            write_result = plc.write(*tags)
+            if write_result:
+                main_window.print_results(f"Successfully wrote to tags to PLC<br>")
+            else:
+                main_window.print_results(f'{write_result.error}<br>', 'red')
         except Exception as e:
             print(f"Error in write_tag: {e}")
             return None
@@ -671,6 +684,129 @@ def write_to_csv(data, csv_file):
             for tag, value in item.items():
                 writer.writerow({'tag': tag, 'value': value})
 
+
+def get_type(tag):
+    if tag_types is not None:
+        if tag in tag_types:
+            return tag_types[tag]['data_type']
+    
+    return None
+    
+
+def get_dim(tag):
+    if tag_types is not None:
+        if tag in tag_types:
+            return tag_types[tag]['dimensions']
+    
+    return None
+
+def eval_value(value):
+    return eval(value)
+
+
+def verify_write_values(tag, value):
+
+    is_list = False
+    is_full_list = False
+    list_size = 0
+
+    if '[' in tag and ']' in tag or '{' in tag and '}' in tag:
+        
+        is_list = True
+
+        if '{' in tag and '}' in tag:
+            is_full_list = True
+            list_size = int(tag[tag.find('{')+1:tag.find('}')])
+
+        tag = re.sub(r"(\[\d+\])|(\{\d+\})", "", tag)
+
+    type = get_type(tag)
+    dim = get_dim(tag)
+    print(is_full_list)
+    print(list_size)
+
+    print(type)
+    print(dim)
+
+    if type is None:
+        return False
+    elif type == 'BOOL':
+        if value.lower() in ['true', 'false'] or value in ['1', '0']:
+            return True
+        else:
+            return False
+    elif type == 'STRING':
+        return True
+    elif type == 'DINT':
+        if is_full_list:
+            eval_value = eval(value)
+            if isinstance(eval_value, list):
+                for item in eval_value:
+                    if not isinstance(item, int):
+                        return False
+                if len(eval_value) == list_size:
+                    return True
+            else:
+                return False
+        else:
+            if value.isdigit():
+                return True
+            else:
+                return False
+    elif type == 'INT':
+        if is_full_list:
+            eval_value = eval(value)
+            if eval_value is list:
+                for item in eval_value:
+                    if not isinstance(item, int):
+                        return False
+                if len(eval_value) == list_size:
+                    return True
+            else:
+                return False
+        else:
+            if value.isdigit():
+                return True
+            else:
+                return False
+    elif type == 'SINT':
+        if is_full_list:
+            eval_value = eval(value)
+            if eval_value is list:
+                for item in eval_value:
+                    if not isinstance(item, int):
+                        return False
+                if len(eval_value) == list_size:
+                    return True
+            else:
+                return False
+        else:
+            if value.isdigit():
+                return True
+            else:
+                return False
+    elif type == 'REAL':
+        if is_full_list:
+            eval_value = eval(value)
+            if eval_value is list:
+                for item in eval_value:
+                    if not isinstance(item, int) or not isinstance(item, float):
+                        return False
+                if len(eval_value) == list_size:
+                    return True
+            else:
+                return False
+        else:
+            if value.isdigit() or value.count('.') == 1:
+                return True
+            else:
+                return False
+    else:
+        try:
+            eval(value)
+            return True
+        except:
+            return False
 
 class Trender(QObject):
     """
@@ -1315,8 +1451,6 @@ class MainWindow(QMainWindow):
         # open about window and help window when their respective actions are triggered
         self.menubar.actions()[0].triggered.connect(self.show_about_window)
         self.menubar.actions()[1].triggered.connect(self.show_help_window)
-
-        
 
         # Create timer for checking PLC connection
         self.plc_connection_check_timer = QTimer()
@@ -2015,7 +2149,8 @@ class MainWindow(QMainWindow):
         if check_plc_connection(plc, self):
             if self.tag_input.hasAcceptableInput():
                 if self.is_valid_tag_input(self.tag_input.text(), tag_types):
-                    if self.verify_write_values():
+                    #if self.verify_write_values():
+                    if verify_write_values(self.tag_input.text(), self.write_value.text()):
                         self.save_history()
                         if self.file_name.text() != '':
                             file_name = self.check_and_convert_file_name()
@@ -2024,6 +2159,8 @@ class MainWindow(QMainWindow):
                         else:
                             write_tag(self.tag_input.text(), self.write_value.text(
                             ), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection=self.file_format)
+                    else:
+                        self.print_results("Value input is invalid.", 'red')
                 else:
                     self.print_results("Tag or tags do not exist in PLC.", 'red')
             else:
