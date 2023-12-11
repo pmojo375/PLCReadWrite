@@ -54,6 +54,7 @@ def connect_to_plc(ip, connect_button, main_window):
     Args:
         ip (str): The IP address of the PLC to connect to.
         connect_button (QPushButton): The button to update the text of.
+        main_window (MainWindow): The main window object.
 
     Returns:
         None
@@ -61,14 +62,16 @@ def connect_to_plc(ip, connect_button, main_window):
     global plc
     global tag_types
 
-    if plc != None:
+    if plc is not None:
+        # Close the existing connection
         plc.close()
         connect_button.setText("Connect")
-        main_window.menu_status.setText(f"Disconnected")
+        main_window.menu_status.setText("Disconnected")
         plc = None
         main_window.stop_plc_connection_check()
         main_window.disable_buttons()
     else:
+        # Open a new connection
         plc = LogixDriver(ip)
         plc.open()
 
@@ -83,7 +86,6 @@ def connect_to_plc(ip, connect_button, main_window):
         main_window.start_plc_connection_check()
         main_window.enable_buttons()
         main_window.showConnectedDialog()
-
 
 def check_plc_connection(plc, main_window):
     """
@@ -278,6 +280,8 @@ def read_tag(tag_names, plc, result_window, **kwargs):
         list: A list of dictionaries containing the tag names and their corresponding values.
     """
 
+    tree_data = []
+
     # split tag name(s) into a list
     tag_names = [name.strip() for name in tag_names.split(',')]
 
@@ -308,11 +312,9 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                 tag_data.append(crawl_and_format(value, entry_tag, {}))
                 if isinstance(value, list):
                     for i, v in enumerate(value):
-                        result_window.add_to_tree(
-                            {f'{read_result.tag}[{i}]': v}, result_window.tree.invisibleRootItem())
+                        tree_data.append({f'{read_result.tag}[{i}]': v})
                 else:
-                    result_window.add_to_tree(
-                        {read_result.tag: value}, result_window.tree.invisibleRootItem())
+                    tree_data.append({read_result.tag: value})
             else:
                 result_window.print_results(f"Error: {read_result.error}")
 
@@ -330,17 +332,15 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                             
                             tag_name_formatted = re.sub(pattern, '', tag_names[i])
 
-                            result_window.add_to_tree(
-                                {f'{tag_name_formatted}[{y}]': v}, result_window.tree.invisibleRootItem())
+                            tree_data.append({f'{tag_name_formatted}[{y}]': v})
                     else:
                         
                         tag_name_formatted = re.sub(pattern, '', tag_names[i])
 
-                        result_window.add_to_tree(
-                            {tag_name_formatted: value}, result_window.tree.invisibleRootItem())
+                        tree_data.append({tag_name_formatted: value})
                 else:
                     result_window.print_results(f"Error: {read_result[i].error}", 'red')
-                    
+
         if store_to_file:
             if file_selection == 0:
                 serialize_to_yaml(read_result, yaml_file=file_name)
@@ -351,16 +351,19 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                 
             result_window.print_results(f'Successfully wrote to file: {file_name}<br>')
 
+        result_window.add_to_tree(tree_data, result_window.tree.invisibleRootItem(), True)
+
+        results_to_print = ''
+
         for result in tag_data:
             for tag, value in result.items():
 
                 pattern = r'\{[^}]*\}'
 
                 tag = re.sub(pattern, '', tag)
+                results_to_print += f'{tag} = {value}<br>'
 
-                result_window.print_results(f"{tag} = {value}", 'yellow')
-                result_window.tag_read_history[tag] = value
-
+        result_window.print_results(results_to_print, 'yellow')
         result_window.print_results(f'', 'white')
     except Exception as e:
         print(f"Error in read_tags: {e}")
@@ -1651,6 +1654,14 @@ class MainWindow(QMainWindow):
         self.tag_input.setText(self.settings.value('tag', ''))
         self.populate_list_from_history()
 
+        self.read_thread = QThread()
+
+    def start_read_thread(self):
+        self.read_thread.start()
+
+    def read_thread_on_finished(self):
+        self.read_thread.quit()
+
     def set_autocomplete(self):
         self.completer = QCompleter(tag_types.keys(), self)
         self.completer.setCaseSensitivity(Qt.CaseSensitive)
@@ -1685,55 +1696,100 @@ class MainWindow(QMainWindow):
     def clear_tree(self):
         self.tree.clear()
 
-    def add_to_tree(self, data, parent):
+    def add_to_tree(self, data, parent, list_of_items=False):
         if parent.childCount() > 0:
             existing_keys = {parent.child(i).text(0): parent.child(
                 i) for i in range(parent.childCount())}
         else:
             existing_keys = {}
 
-        if isinstance(data, dict):
-            for key, value in data.items():
-                if key in existing_keys:
-                    item = existing_keys[key]
-                    if isinstance(value, dict):
-                        self.add_to_tree(value, item)
+        if list_of_items:
+            for data in data:
+                if isinstance(data, dict):
+                    for key, value in data.items():
+                        if key in existing_keys:
+                            item = existing_keys[key]
+                            if isinstance(value, dict):
+                                self.add_to_tree(value, item)
+                            else:
+                                item.setText(1, str(value))
+                        else:
+                            if isinstance(value, dict):
+                                new_item = QTreeWidgetItem(
+                                    parent, [key, ''])
+                                self.add_to_tree(value, new_item)
+                            elif isinstance(value, list):
+                                for i, v in enumerate(value):
+                                    if isinstance(v, dict):
+                                        new_item = QTreeWidgetItem(
+                                            parent, [f'{key}[{i}]', ''])
+                                        self.add_to_tree(v, new_item)
+                                    else:
+                                        new_item = QTreeWidgetItem(
+                                            parent, [f'{key}[{i}]', str(v)])
+                                        self.add_to_tree(v, new_item)
+                            else:
+                                new_item = QTreeWidgetItem(parent, [key, str(value)])
+                if isinstance(data, list):
+                    for i, value in enumerate(data):
+                        if isinstance(value, dict):
+                            new_item = QTreeWidgetItem(parent, [f'{i}', ''])
+                            self.add_to_tree(value, new_item)
+                        elif isinstance(value, list):
+                            for j, v in enumerate(value):
+                                if isinstance(v, dict):
+                                    new_item = QTreeWidgetItem(
+                                        parent, [f'{i}[{j}]', ''])
+                                    self.add_to_tree(v, new_item)
+                                else:
+                                    new_item = QTreeWidgetItem(
+                                        parent, [f'{i}[{j}]', str(v)])
+                                    self.add_to_tree(v, new_item)
+                        else:
+                            new_item = QTreeWidgetItem(parent, [f'{i}', str(value)])
+        else:
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    if key in existing_keys:
+                        item = existing_keys[key]
+                        if isinstance(value, dict):
+                            self.add_to_tree(value, item)
+                        else:
+                            item.setText(1, str(value))
                     else:
-                        item.setText(1, str(value))
-                else:
+                        if isinstance(value, dict):
+                            new_item = QTreeWidgetItem(
+                                parent, [key, ''])
+                            self.add_to_tree(value, new_item)
+                        elif isinstance(value, list):
+                            for i, v in enumerate(value):
+                                if isinstance(v, dict):
+                                    new_item = QTreeWidgetItem(
+                                        parent, [f'{key}[{i}]', ''])
+                                    self.add_to_tree(v, new_item)
+                                else:
+                                    new_item = QTreeWidgetItem(
+                                        parent, [f'{key}[{i}]', str(v)])
+                                    self.add_to_tree(v, new_item)
+                        else:
+                            new_item = QTreeWidgetItem(parent, [key, str(value)])
+            if isinstance(data, list):
+                for i, value in enumerate(data):
                     if isinstance(value, dict):
-                        new_item = QTreeWidgetItem(
-                            parent, [key, ''])
+                        new_item = QTreeWidgetItem(parent, [f'{i}', ''])
                         self.add_to_tree(value, new_item)
                     elif isinstance(value, list):
-                        for i, v in enumerate(value):
+                        for j, v in enumerate(value):
                             if isinstance(v, dict):
                                 new_item = QTreeWidgetItem(
-                                    parent, [f'{key}[{i}]', ''])
+                                    parent, [f'{i}[{j}]', ''])
                                 self.add_to_tree(v, new_item)
                             else:
                                 new_item = QTreeWidgetItem(
-                                    parent, [f'{key}[{i}]', str(v)])
+                                    parent, [f'{i}[{j}]', str(v)])
                                 self.add_to_tree(v, new_item)
                     else:
-                        new_item = QTreeWidgetItem(parent, [key, str(value)])
-        if isinstance(data, list):
-            for i, value in enumerate(data):
-                if isinstance(value, dict):
-                    new_item = QTreeWidgetItem(parent, [f'{i}', ''])
-                    self.add_to_tree(value, new_item)
-                elif isinstance(value, list):
-                    for j, v in enumerate(value):
-                        if isinstance(v, dict):
-                            new_item = QTreeWidgetItem(
-                                parent, [f'{i}[{j}]', ''])
-                            self.add_to_tree(v, new_item)
-                        else:
-                            new_item = QTreeWidgetItem(
-                                parent, [f'{i}[{j}]', str(v)])
-                            self.add_to_tree(v, new_item)
-                else:
-                    new_item = QTreeWidgetItem(parent, [f'{i}', str(value)])
+                        new_item = QTreeWidgetItem(parent, [f'{i}', str(value)])
 
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
