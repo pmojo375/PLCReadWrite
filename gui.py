@@ -1,6 +1,7 @@
 import sys
 import time
 from pycomm3 import LogixDriver
+from functools import wraps
 #from offline_read import LogixDriver
 from PySide6.QtCharts import QChart, QChartView, QLineSeries
 import qdarktheme
@@ -104,7 +105,8 @@ def check_plc_connection(plc, main_window):
                 plc.get_plc_name()
                 return True
             except:
-                main_window.stop_plc_connection_check()
+                main_window.stop_plc_connection_check(
+                main_window.print_results(f"Lost connection to PLC.<br>", 'red'))
                 return False
         else:
             main_window.stop_plc_connection_check()
@@ -235,7 +237,7 @@ def process_csv_read(csv_file):
     return processed_data
 
 
-def crawl_and_format(obj, name, data):
+def crawl_and_format(obj, name, data, start_index=0):
     """
     Recursively crawls through a dictionary or list and formats the data into a flattened dictionary.
 
@@ -255,7 +257,7 @@ def crawl_and_format(obj, name, data):
     elif isinstance(obj, list):
         # iterate through the list
         for i, value in enumerate(obj):
-            data = crawl_and_format(value, f'{name}[{i}]', data)
+            data = crawl_and_format(value, f'{name}[{i + start_index}]', data)
     # obj is an elementary object
     else:
         data[f'{name}'] = f'{obj}'
@@ -281,6 +283,7 @@ def read_tag(tag_names, plc, result_window, **kwargs):
     """
 
     tree_data = []
+    pattern = r'\{[^}]*\}'
 
     # split tag name(s) into a list
     tag_names = [name.strip() for name in tag_names.split(',')]
@@ -308,34 +311,64 @@ def read_tag(tag_names, plc, result_window, **kwargs):
         if len(tag_names) == 1:
             if read_result.error is None:
                 entry_tag = tag_names[0]
+
+                match = re.search(r'\[(\d+)\]', entry_tag)
+                if match:
+                    start_index = int(match.group(1))
+
+                # check if tag has {}
+                if re.search(r'\{[^}]*\}', entry_tag):
+                    tag_name_formatted = re.sub(pattern, '', entry_tag)
+                    tag_name_formatted = re.sub(r'\[\d+\]', '', tag_name_formatted)
+                else:
+                    tag_name_formatted = entry_tag
+
                 value = read_result.value
-                tag_data.append(crawl_and_format(value, entry_tag, {}))
+                tag_data.append(crawl_and_format(value, tag_name_formatted, {}, start_index))
                 if isinstance(value, list):
                     for i, v in enumerate(value):
-                        tree_data.append({f'{read_result.tag}[{i}]': v})
+                        tree_data.append({f'{tag_name_formatted}[{i + start_index}]': v})
                 else:
-                    tree_data.append({read_result.tag: value})
+                    tree_data.append({tag_name_formatted: value})
             else:
                 result_window.print_results(f"Error: {read_result.error}")
 
         else:
-            
-            pattern = r'\{[^}]*\}'
 
             for i, tag in enumerate(tag_names):
                 if read_result[i].error is None:
                     entry_tag = tag_names[i]
+
+                    match = re.search(r'\[(\d+)\]', entry_tag)
+                    if match:
+                        start_index = int(match.group(1))
+
+                    if re.search(r'\{[^}]*\}', entry_tag):
+                        tag_name_formatted = re.sub(pattern, '', entry_tag)
+                        tag_name_formatted = re.sub(r'\[\d+\]', '', tag_name_formatted)
+                    else:
+                        tag_name_formatted = entry_tag
+
                     value = read_result[i].value
-                    tag_data.append(crawl_and_format(value, entry_tag, {}))
+                    tag_data.append(crawl_and_format(value, tag_name_formatted, {}, start_index))
                     if isinstance(value, list):
                         for y, v in enumerate(value):
                             
-                            tag_name_formatted = re.sub(pattern, '', tag_names[i])
+                            # check if tag has {}
+                            if re.search(r'\{[^}]*\}', entry_tag):
+                                tag_name_formatted = re.sub(pattern, '', entry_tag)
+                                tag_name_formatted = re.sub(r'\[\d+\]', '', tag_name_formatted)
+                            else:
+                                tag_name_formatted = entry_tag
 
-                            tree_data.append({f'{tag_name_formatted}[{y}]': v})
+                            tree_data.append({f'{tag_name_formatted}[{y + start_index}]': v})
                     else:
-                        
-                        tag_name_formatted = re.sub(pattern, '', tag_names[i])
+                        # check if tag has {}
+                        if re.search(r'\{[^}]*\}', tag_names[i]):
+                            tag_name_formatted = re.sub(pattern, '', tag_names[i])
+                            tag_name_formatted = re.sub(r'\[\d+\]', '', tag_name_formatted)
+                        else:
+                            tag_name_formatted = entry_tag
 
                         tree_data.append({tag_name_formatted: value})
                 else:
@@ -357,8 +390,6 @@ def read_tag(tag_names, plc, result_window, **kwargs):
 
         for result in tag_data:
             for tag, value in result.items():
-
-                pattern = r'\{[^}]*\}'
 
                 tag = re.sub(pattern, '', tag)
                 results_to_print += f'{tag} = {value}<br>'
@@ -2396,6 +2427,8 @@ class MainWindow(QMainWindow):
     def stop_plc_connection_check(self):
         self.plc_connection_check_timer.stop()
         self.connect_button.setText("Connect")
+        self.menu_status.setText("Disconnected")
+        self.disable_buttons()
 
 
 app = QApplication(sys.argv)
