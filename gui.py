@@ -1,4 +1,5 @@
 import sys
+import input_checks
 import time
 from pycomm3 import LogixDriver
 from functools import wraps
@@ -47,6 +48,75 @@ tag_types = None
 tag_dimensions = None
 plc = None
 
+# decorators
+def check_plc_connection_decorator(func):
+    """
+    A decorator to check if the PLC is connected before executing the function.
+
+    Args:
+        func (function): The function to decorate.
+
+    Returns:
+        function: The decorated function.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        main_window = get_main_window()
+        if check_plc_connection(plc, main_window):
+            return func(*args, **kwargs)
+        else:
+            main_window.print_results(f"Error: No connection to PLC.<br>", 'red')
+    return wrapper
+
+# checks if the tag is a tag in the tag list
+def check_tag_decorator(func):
+    """
+    A decorator to check if the tag is a tag in the tag list.
+
+    Args:
+        func (function): The function to decorate.
+
+    Returns:
+        function: The decorated function.
+    """
+    @wraps(func)
+
+    def wrapper(*args, **kwargs):
+    
+        main_window = get_main_window()
+
+        tag = main_window.tag_input.text()
+
+        if input_checks.check_tag_range(tag, tag_types):
+            return func(*args, **kwargs)
+        else:
+            main_window.print_results(f"Error: Tag range incorrect.<br>", 'red')
+    return wrapper
+
+def check_value_decorator(func):
+    """
+    A decorator to check if the value is valid for the given tag.
+
+    Args:
+        func (function): The function to decorate.
+
+    Returns:
+        function: The decorated function.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        main_window = get_main_window()
+        tag = main_window.tag_input.text()
+        value = main_window.write_value.text()
+
+        if input_checks.check_value_length(tag, value, tag_types):
+            if input_checks.check_value_type(tag, value, tag_types):
+                return func(*args, **kwargs)
+            else:
+                main_window.print_results(f"Error: Value type does not match tag type.<br>", 'red')
+        else:
+            main_window.print_results(f"Error: Value length out of tag bounds.<br>", 'red')
+    return wrapper
 
 def connect_to_plc(ip, connect_button, main_window):
     """
@@ -725,159 +795,6 @@ def write_to_csv(data, csv_file):
 - If not list, check data type
 
 '''
-
-# checks if the tag referenced is a list
-def check_if_tag_is_list(tag):
-    if tag_types is not None:
-
-        # strip out the brackets
-        formatted_tag = re.sub(r"(\[\d+\])|(\{\d+\})", "", tag)
-
-        if formatted_tag in tag_types:
-            dimensions = tag_types[formatted_tag]['dimensions']
-            if dimensions == [0, 0, 0]:
-                return False
-            elif dimensions[0] > 0 or dimensions[1] > 0 or dimensions[2] > 0:
-                return True
-            else:
-                return False
-        else:
-            return False
-    else:
-        return False
-
-#TODO: Check if the non-list tag has no [] or {} and if it does, return false
-# checks if the tag inputted is within the range of the list
-def check_list_tag_range(tag):
-    if tag_types is not None:
-
-        # strip out the brackets
-        formatted_tag = re.sub(r"(\[\d+\])|(\{\d+\})", "", tag)
-
-        if formatted_tag in tag_types:
-            dimensions = tag_types[formatted_tag]['dimensions']
-
-            # if tag is a list
-            if dimensions[0] > 0:
-
-                # get the size of the tag inputted if it has {}
-                if '{' in tag and '}' in tag:
-                    list_size = int(tag[tag.find('{')+1:tag.find('}')])
-
-                    # get the start position of the tag inputted if it has []
-                    if '[' in tag and ']' in tag:
-                        start_pos = int(tag[tag.find('[')+1:tag.find(']')])
-                    else:
-                        start_pos = 0
-                else:
-                    list_size = 1
-
-                    # get the start position of the tag inputted if it has []
-                    if '[' in tag and ']' in tag:
-                        start_pos = int(tag[tag.find('[')+1:tag.find(']')])
-                    else:
-                        start_pos = 0
-                
-                if start_pos + list_size <= dimensions[0]:
-                    return True
-                else:
-                    return False
-            else:
-                return True
-        else:
-            return False
-    else:
-        return False
-
-def get_tag_length(tag):
-    # get the size of the tag inputted if it has {}
-    if '{' in tag and '}' in tag:
-        return int(tag[tag.find('{')+1:tag.find('}')])
-    else:
-        return 1
-    
-def get_tag_start_pos(tag):
-    # get the start position of the tag inputted if it has []
-    if '[' in tag and ']' in tag:
-        return int(tag[tag.find('[')+1:tag.find(']')])
-    else:
-        return 0
-    
-def get_tag_type(tag):
-    formatted_tag = re.sub(r"(\[\d+\])|(\{\d+\})", "", tag)
-
-    if tag_types is not None:
-        if formatted_tag in tag_types:
-            return tag_types[formatted_tag]['data_type']
-        else:
-            return None
-    else:
-        return None
-
-# TODO: for lists, check the values in the list not the etire list
-def check_value_type(tag, value):
-    formatted_tag = re.sub(r"(\[\d+\])|(\{\d+\})", "", tag)
-
-    if tag_types is not None:
-        if formatted_tag in tag_types:
-            type = tag_types[formatted_tag]['data_type']
-            dimensions = tag_types[formatted_tag]['dimensions']
-
-        if dimensions[0] == 0:
-            if type == 'BOOL':
-                if value.lower() in ['true', 'false'] or value in ['1', '0']:
-                    return True
-                else:
-                    return False
-            elif type == 'STRING':
-                return True
-            elif type == 'DINT' or type == 'INT' or type == 'SINT':
-                if value.isdigit():
-                    return True
-                else:
-                    return False
-            elif type == 'REAL':
-                if value.isdigit() or value.count('.') == 1:
-                    return True
-                else:
-                    return False
-            else:
-                try:
-                    eval(value)
-                    return True
-                except:
-                    return False
-        else:
-            try:
-                eval(value)
-                return True
-            except:
-                return False
-
-def check_value_length(tag, value):
-    formatted_tag = re.sub(r"(\[\d+\])|(\{\d+\})", "", tag)
-
-    if tag_types is not None:
-        if formatted_tag in tag_types:
-            num_to_write = get_tag_length(tag)
-            start_pos = get_tag_start_pos(tag)
-
-            length = num_to_write - start_pos
-
-            try:
-                if length > 1:
-                    eval_obj = eval(value)
-                    if isinstance(eval_obj, list):
-                        if len(eval_obj) == length:
-                            return True
-                        else:
-                            return False
-                    else:
-                        return False
-                else:
-                    return True
-            except:
-                return False
 
 class Trender(QObject):
     """
@@ -2055,8 +1972,8 @@ class MainWindow(QMainWindow):
             for tag in tags:
                 if self.tag_input.hasAcceptableInput():
                     if self.is_valid_tag_input(tag, tag_types):
-                        if check_if_tag_is_list(self.get_from_list()):
-                            if check_list_tag_range(self.get_from_list()):
+                        if input_checks.check_if_tag_is_list(self.get_from_list(), tag_types):
+                            if input_checks.check_tag_range(self.get_from_list(), tag_types):
                                 # check if tag already in list
                                 if tag not in [self.tags_to_read_list.model().item(i).text() for i in range(self.tags_to_read_list.model().rowCount())]:
                                     self.tags_to_read_list.model().appendRow(
@@ -2199,95 +2116,71 @@ class MainWindow(QMainWindow):
                 file_name = file_name + '.csv'
 
         return file_name
-
+    
+    @check_tag_decorator
+    @check_plc_connection_decorator
     def read_tag_button_clicked(self):
-        if check_plc_connection(plc, self):
-            if self.tag_input.hasAcceptableInput():
-                if self.is_valid_tag_input(self.tag_input.text(), tag_types):
-                    if check_list_tag_range(self.tag_input.text()):
-                        if check_if_tag_is_list(self.tag_input.text()):
-                            if check_list_tag_range(self.tag_input.text()):
-                                self.save_history()
-                                if self.file_name.text() != '':
-                                    file_name = self.check_and_convert_file_name()
-                                    read_tag(self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(
-                                    ), file_name=file_name, file_selection=self.file_format)
-                                else:
-                                    read_tag(self.tag_input.text(
-                                    ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
-                            else:
-                                self.print_results("Tag range is invalid.", 'red')
+        if self.tag_input.hasAcceptableInput():
+            if self.is_valid_tag_input(self.tag_input.text(), tag_types):
+                if input_checks.check_if_tag_is_list(self.tag_input.text(), tag_types):
+                    if input_checks.check_tag_range(self.tag_input.text(), tag_types):
+                        self.save_history()
+                        if self.file_name.text() != '':
+                            file_name = self.check_and_convert_file_name()
+                            read_tag(self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(
+                            ), file_name=file_name, file_selection=self.file_format)
                         else:
-                            self.save_history()
-                            if self.file_name.text() != '':
-                                file_name = self.check_and_convert_file_name()
-                                read_tag(self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(
-                                ), file_name=file_name, file_selection=self.file_format)
-                            else:
-                                read_tag(self.tag_input.text(
-                                ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
+                            read_tag(self.tag_input.text(
+                            ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
                     else:
                         self.print_results("Tag range is invalid.", 'red')
                 else:
-                    self.print_results("Tag or tags do not exist in PLC.", 'red')
-            else:
-                self.print_results("Tag input is invalid.", 'red')
-        else:
-            self.showNotConnectedDialog()
-
-    def read_tag_list_button_clicked(self):
-        if check_plc_connection(plc, self):
-            if self.is_valid_tag_input(self.get_from_list(), tag_types):
-                self.save_history()
-                if self.file_name.text() != '':
-                    file_name = self.check_and_convert_file_name()
-                    read_tag(self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(
-                    ), file_name=file_name, file_selection=self.file_format)
-                else:
-                    read_tag(self.get_from_list(
-                    ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
+                    self.save_history()
+                    if self.file_name.text() != '':
+                        file_name = self.check_and_convert_file_name()
+                        read_tag(self.tag_input.text(), plc, self, store_to_file=self.file_enabled.isChecked(
+                        ), file_name=file_name, file_selection=self.file_format)
+                    else:
+                        read_tag(self.tag_input.text(
+                        ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
             else:
                 self.print_results("Tag or tags do not exist in PLC.", 'red')
         else:
-            self.showNotConnectedDialog()
+            self.print_results("Tag input is invalid.", 'red')
 
-    def write_tag_button_clicked(self):
-        if check_plc_connection(plc, self):
-            if self.tag_input.hasAcceptableInput():
-                if self.is_valid_tag_input(self.tag_input.text(), tag_types):
-                    if check_value_length(self.tag_input.text(), self.write_value.text()):
-                        if check_value_type(self.tag_input.text(), self.write_value.text()):
-                            if check_if_tag_is_list(self.tag_input.text()):
-                                if check_list_tag_range(self.tag_input.text()):
-                                    self.save_history()
-                                    if self.file_name.text() != '':
-                                        file_name = self.check_and_convert_file_name()
-                                        write_tag(self.tag_input.text(), self.write_value.text(
-                                        ), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection=self.file_format)
-                                    else:
-                                        write_tag(self.tag_input.text(), self.write_value.text(
-                                        ), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection=self.file_format)
-                                else:
-                                    self.print_results("Tag range is invalid.", 'red')
-                            else:
-                                self.save_history()
-                                if self.file_name.text() != '':
-                                    file_name = self.check_and_convert_file_name()
-                                    write_tag(self.tag_input.text(), self.write_value.text(
-                                    ), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection=self.file_format)
-                                else:
-                                    write_tag(self.tag_input.text(), self.write_value.text(
-                                    ), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection=self.file_format)
-                        else:
-                            self.print_results("Value type is invalid.", 'red')
-                    else:
-                        self.print_results("Value length is invalid.", 'red')
-                else:
-                    self.print_results("Tag or tags do not exist in PLC.", 'red')
+    @check_plc_connection_decorator
+    def read_tag_list_button_clicked(self):
+        if self.is_valid_tag_input(self.get_from_list(), tag_types):
+            self.save_history()
+            if self.file_name.text() != '':
+                file_name = self.check_and_convert_file_name()
+                read_tag(self.get_from_list(), plc, self, store_to_file=self.file_enabled.isChecked(
+                ), file_name=file_name, file_selection=self.file_format)
             else:
-                self.print_results("Tag input is invalid.", 'red')
+                read_tag(self.get_from_list(
+                ), plc, self, store_to_file=self.file_enabled.isChecked(), file_selection=self.file_format)
         else:
-            self.showNotConnectedDialog()
+            self.print_results("Tag or tags do not exist in PLC.", 'red')
+
+    @check_tag_decorator
+    @check_plc_connection_decorator
+    @check_value_decorator
+    def write_tag_button_clicked(self):
+        if self.tag_input.hasAcceptableInput():
+            if self.is_valid_tag_input(self.tag_input.text(), tag_types):
+                self.save_history()
+                if self.file_name.text() != '':
+                    file_name = self.check_and_convert_file_name()
+                    write_tag(self.tag_input.text(), self.write_value.text(
+                    ), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection=self.file_format)
+                else:
+                    write_tag(self.tag_input.text(), self.write_value.text(
+                    ), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection=self.file_format)
+            else:
+                self.print_results("Tag or tags do not exist in PLC.", 'red')
+        else:
+            self.print_results("Tag input is invalid.", 'red')
+
             
     def verify_write_values(self):
         if not self.write_value.text() == '':
@@ -2430,6 +2323,8 @@ class MainWindow(QMainWindow):
         self.menu_status.setText("Disconnected")
         self.disable_buttons()
 
+def get_main_window():
+    return window
 
 app = QApplication(sys.argv)
 pixmap = QPixmap("splash.jpg")
