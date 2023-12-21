@@ -2,6 +2,7 @@ import sys
 import input_checks
 import time
 from pycomm3 import LogixDriver
+import json
 from functools import wraps
 #from offline_read import LogixDriver
 from PySide6.QtCharts import QChart, QChartView, QLineSeries
@@ -35,9 +36,10 @@ from PySide6.QtWidgets import (
     QToolTip,
     QGroupBox,
     QGraphicsTextItem,
+
 )
 from PySide6 import QtGui
-from PySide6.QtGui import QRegularExpressionValidator, QTextCursor, QPixmap, QMouseEvent, QPainter
+from PySide6.QtGui import QRegularExpressionValidator, QTextCursor, QPixmap, QMouseEvent, QPainter, QStandardItem
 import yaml
 import re
 import datetime
@@ -144,19 +146,24 @@ def connect_to_plc(ip, connect_button, main_window):
     else:
         # Open a new connection
         plc = LogixDriver(ip)
-        plc.open()
 
-        if plc.connected:
-            tag_types = get_tags_from_plc(plc)
-            
-            main_window.set_autocomplete()
-            connect_button.setText("Disconnect")
-            plc.get_plc_name()
-            main_window.menu_status.setText(f"Connected to {plc.get_plc_name()} at {ip}")
+        try:
+            plc.open()
 
-        main_window.start_plc_connection_check()
-        main_window.enable_buttons()
-        main_window.showConnectedDialog()
+            if plc.connected:
+                tag_types = get_tags_from_plc(plc)
+
+                main_window.set_autocomplete()
+                connect_button.setText("Disconnect")
+                plc.get_plc_name()
+                main_window.menu_status.setText(f"Connected to {plc.get_plc_name()} at {ip}")
+
+            main_window.start_plc_connection_check()
+            main_window.enable_buttons()
+            main_window.showConnectedDialog()
+        except:
+            plc = None
+            main_window.print_results(f"Error: Could not connect to PLC at {ip}.<br>", 'red')
 
 def check_plc_connection(plc, main_window):
     """
@@ -175,8 +182,9 @@ def check_plc_connection(plc, main_window):
                 plc.get_plc_name()
                 return True
             except:
-                main_window.stop_plc_connection_check(
-                main_window.print_results(f"Lost connection to PLC.<br>", 'red'))
+                main_window.stop_plc_connection_check()
+                plc = None
+                main_window.print_results(f"Lost connection to PLC.<br>", 'red')
                 return False
         else:
             main_window.stop_plc_connection_check()
@@ -478,55 +486,77 @@ def get_tags_from_plc(plc):
 
         for tag_name, tag_info in data.items():
             tag_data_type = tag_info['data_type']
-            tag_dimensions = tag_info.get('dimensions', [0])
+            tag_type = tag_info['tag_type']
+            tag_dimensions = tag_info.get('dimensions', [0, 0, 0])
 
-            if isinstance(tag_data_type, str):
+            if tag_type == 'atomic':
                 tag_list[tag_name] = {
                     'data_type': tag_data_type,
-                    'dimensions': tag_dimensions
-                }
-            elif isinstance(tag_data_type, dict):
-                # Store the parent structure
-                tag_list[tag_name] = {
-                    'data_type': tag_data_type['name'],
                     'dimensions': tag_dimensions,
-                    'structure': True
+                    'structure': False
                 }
+            elif tag_type == 'struct':
+                # Store the parent structure
+                if tag_data_type['name'] == 'STRING':
+                    tag_list[tag_name] = {
+                        'data_type': tag_data_type['name'],
+                        'dimensions': tag_dimensions,
+                        'structure': False
+                    }
+                else:
+                    tag_list[tag_name] = {
+                        'data_type': tag_data_type['name'],
+                        'dimensions': tag_dimensions,
+                        'structure': True
+                    }
                 # Recursively store children
-                tag_list = extract_child_data_types(
-                    tag_data_type['internal_tags'], tag_list, tag_name, tag_dimensions)
+                if tag_data_type['name'] != 'STRING':
+                    tag_list = extract_child_data_types(
+                        tag_data_type['internal_tags'], tag_list, tag_name)
                 
 
+
+        print('PartDataCarrier' in tag_list)
         return tag_list
     except Exception as e:
         print(f"Error in get_tags_from_plc function: {e}")
         return None
 
 
-def extract_child_data_types(structure, array, name, parent_dimensions):
+def extract_child_data_types(structure, array, name):
     for child_name, child_info in structure.items():
         child_data_type = child_info['data_type']
+        child_tag_type = child_info['tag_type']
         child_array_length = child_info.get('array', 0)
 
         if child_name.startswith('_') or child_name.startswith('ZZZZZZZZZZ'):
             continue
 
         full_tag_name = f'{name}.{child_name}'
-        if isinstance(child_data_type, str):
+        if child_tag_type == 'atomic':
             array[full_tag_name] = {
                 'data_type': child_data_type,
-                'dimensions': [child_array_length] if child_array_length > 0 else [0]
+                'dimensions': [child_array_length, 0, 0],
+                'structure': False
             }
-        elif isinstance(child_data_type, dict):
+        elif child_tag_type == 'struct':
             # Store the structure itself
-            array[full_tag_name] = {
-                'data_type': child_data_type['name'],
-                'dimensions': parent_dimensions,
-                'structure': True
-            }
+            if child_data_type['name'] == 'STRING':
+                array[full_tag_name] = {
+                    'data_type': child_data_type['name'],
+                    'dimensions': [child_array_length, 0, 0 ],
+                    'structure': False
+                }
+            else:
+                array[full_tag_name] = {
+                    'data_type': child_data_type['name'],
+                    'dimensions': [child_array_length, 0, 0],
+                    'structure': True
+                }
             # Recursively store children
-            array = extract_child_data_types(
-                child_data_type['internal_tags'], array, full_tag_name, parent_dimensions)
+            if child_data_type['name'] != 'STRING':
+                array = extract_child_data_types(
+                    child_data_type['internal_tags'], array, full_tag_name)
 
     return array
 
@@ -546,11 +576,14 @@ def set_data_type(value, tag):
         ValueError: If the value cannot be converted to the specified data type.
     """
     try:
+        print(tag)
         # Check if the tag is in the tag_list
         if tag in tag_types:
             # Get the data type from the tag_list
             type = tag_types[tag]['data_type']
-            type = tag_types[tag]['dimensions']
+            dimensions = tag_types[tag]['dimensions']
+
+            print(type)
 
             # Set the data type based on the type from the tag_list
             if type == 'STRING':
@@ -633,15 +666,21 @@ def write_tag(tags, values, main_window, plc, **kwargs):
     elif file_selection == 1:
         file_name = kwargs.get('file_name', 'tag_values.csv')
 
-    tags = [t.strip() for t in tags.split(',')]
+    if not isinstance(tags, list):
+        tags = [t.strip() for t in tags.split(',')]
 
     if not file_enabled:
-        values = [t.strip() for t in values.split(',')]
+        if type(values) == str:
+            values = [t.strip() for t in values.split(',')]
+        else:
+            if not isinstance(values, list):
+                values = [values]
 
         write_data = []
 
         for i, tag in enumerate(tags):
-            write_data.append((tag, set_data_type(values[i], tag)))
+            #write_data.append((tag, set_data_type(values[i], tag)))
+            write_data.append((tag, values[i]))
 
         try:
             write_result = plc.write(*write_data)
@@ -785,16 +824,30 @@ def write_to_csv(data, csv_file):
             for tag, value in item.items():
                 writer.writerow({'tag': tag, 'value': value})
 
-'''
-- Check if tag is a list by getting dimentions
-- If list, check if tag input has [] or {}
-- Get the size of the list in {} to compare the write value to
-- Check the state of [] and enture its at 0 if not get the size - the length of the tag input
-- Check if the write value is a list
-- If list, check if the length is equal to the size of the list
-- If not list, check data type
+@check_plc_connection_decorator
+def get_structure_for_value_tree(tag, main_window):
+    main_window.value_tree.clear()
+    
+    #check if the tag is an array
+    if '{' in tag or '}' in tag:
+        # get the number of elements in the array
+        num = re.search(r'\{(\d+)\}', main_window.tag_input.text()).group(1)
 
-'''
+        # get the tag name without the array
+        tag = re.sub(r'\{\d+\}', '', main_window.tag_input.text())
+
+        if '[' in tag or ']' in tag:
+            # get the start index of the array
+            start_index = int(re.search(r'\[(\d+)\]', tag).group(1))
+            # get the tag name without the array
+            tag = re.sub(r'\[\d+\]', '', tag)
+        else:
+            start_index = 0
+
+        for i in range(int(num)):
+            main_window.add_data_to_write_tree(main_window.value_tree, f'{tag}[{start_index + i}]', plc.read(tag).value)
+    else:
+        main_window.add_data_to_write_tree(main_window.value_tree, tag, plc.read(tag).value)
 
 class Trender(QObject):
     """
@@ -1522,15 +1575,23 @@ class MainWindow(QMainWindow):
 
         # Create widgets
         self.write_button = QPushButton("Write")
+        self.generate_button = QPushButton("Generate Stucture")
         self.write_value = QLineEdit()
+        
+        self.value_tree = QTreeWidget()
+        self.value_tree.setColumnCount(2)
+        self.value_tree.setHeaderLabels(['Tag', 'Value'])
 
         # Set parameters
         self.write_value.setPlaceholderText("Value")
         self.write_button.setDisabled(True)
 
         # Add to layouts
-        write_tab_layout.addWidget(self.write_value)
+        write_tab_layout.addWidget(self.generate_button)
+        write_tab_layout.addWidget(self.value_tree)
         write_tab_layout.addWidget(self.write_button)
+
+
 
         # --------------------------------------------#
         #                  TREND TAB                  #
@@ -1745,7 +1806,10 @@ class MainWindow(QMainWindow):
         # Connect read button to read_tag function
         self.read_button.clicked.connect(self.read_tag_button_clicked)
 
-        self.write_button.clicked.connect(self.write_tag_button_clicked)
+        self.generate_button.clicked.connect(lambda: get_structure_for_value_tree(self.tag_input.text(), self))
+
+        #self.write_button.clicked.connect(self.write_tag_button_clicked)
+        self.write_button.clicked.connect(self.write_tag)
 
         self.trend_button.clicked.connect(self.trender_thread)
         self.trend_plot_button.clicked.connect(lambda: self.show_plot_setup_window(self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
@@ -1790,17 +1854,6 @@ class MainWindow(QMainWindow):
         self.completer.setCompletionMode(QCompleter.InlineCompletion)
         self.tag_input.setCompleter(self.completer)
 
-
-    def get_data_from_tree(self, parent):
-        data = {}
-        for i in range(parent.childCount()):
-            child = parent.child(i)
-            if child.childCount() > 0:
-                data[child.text(0)] = self.get_data_from_tree(child)
-            else:
-                data[child.text(0)] = child.text(1)
-        return data
-
     def clear_results(self):
         self.results.clear()
 
@@ -1817,6 +1870,88 @@ class MainWindow(QMainWindow):
 
     def clear_tree(self):
         self.tree.clear()
+
+    def get_data_from_tree(self, parent):
+        data = {}
+        for i in range(parent.childCount()):
+            child = parent.child(i)
+            if child.childCount() > 0:
+                data[child.text(0)] = self.get_data_from_tree(child)
+            else:
+                data[child.text(0)] = child.text(1)
+        return data
+    
+    def convert_write_values(self, data, name):
+        if isinstance(data, dict):
+            return {key: self.convert_write_values(value, f'{name}.{key}') for key, value in data.items()}
+        elif isinstance(data, list):
+            return [self.convert_write_values(value, name) for value in data]
+        else:
+            return set_data_type(data, name)
+    
+    def add_data_to_write_tree(self, parent, tag, value):
+        if isinstance(value, dict):
+            item = QTreeWidgetItem(parent, [tag, ''])
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            for key, value in value.items():
+                self.add_data_to_write_tree(item, key, value)
+        elif isinstance(value, list):
+            item = QTreeWidgetItem(parent, [tag, ''])
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            for i, value in enumerate(value):
+                self.add_data_to_write_tree(item, f'{i}', value)
+        else:
+            item = QTreeWidgetItem(parent, [tag, str(value)])
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+
+        self.value_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.value_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+
+    def write_tag(self):
+
+        data = self.get_value_tree_data(self.value_tree.invisibleRootItem())
+
+        tags = []
+        formatted_tags = []
+        values = []
+
+        for key, value in data.items():
+
+            tags.append(key)
+
+            # remove the [] from the tag name
+            key = re.sub(r'\[\d+\]', '', key)
+
+            formatted_tags.append(key)
+
+            values.append(self.convert_write_values(value, key))
+
+        print(tags)
+        print(values)
+
+        write_tag(tags, values, self, plc)
+
+    def get_value_tree_data(self, parent):
+        if parent.childCount() == 0:
+            return parent.text(1)
+        
+        data = {}
+
+        for i in range(parent.childCount()):
+            child = parent.child(i)
+            child_data = self.get_value_tree_data(child)
+
+            tag = child.text(0)
+
+            if tag:
+                data[tag] = child_data
+            else:
+                if isinstance(child_data, list):
+                    data.setdefault('list', []).extend(child_data)
+                else:
+                    data.setdefault('list', []).append(child_data)
+
+        return data
 
     def add_to_tree(self, data, parent, list_of_items=False):
         if parent.childCount() > 0:
@@ -2332,7 +2467,7 @@ splash = QSplashScreen(pixmap, Qt.WindowStaysOnTopHint)
 splash.setMask(pixmap.mask())
 splash.show()
 app.processEvents()
-time.sleep(2)
+time.sleep(1)
 app.setWindowIcon(QtGui.QIcon('icon.ico'))
 qdarktheme.setup_theme()
 window = MainWindow()
