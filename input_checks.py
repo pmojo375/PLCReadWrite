@@ -1,5 +1,6 @@
 import re
 
+
 def check_if_tag_is_list(tag, tag_types):
     """
     Check if a given tag is a list based on its dimensions.
@@ -29,7 +30,8 @@ def check_if_tag_is_list(tag, tag_types):
     else:
         return False
 
-#TODO: Check if the non-list tag has no [] or {} and if it does, return false
+# TODO: Check if the non-list tag has no [] or {} and if it does, return false
+
 
 def check_tag_range(tag, tag_types):
     """
@@ -69,7 +71,7 @@ def check_tag_range(tag, tag_types):
                         start_pos = int(tag[tag.find('[')+1:tag.find(']')])
                     else:
                         start_pos = 0
-                
+
                 if start_pos + list_size <= dimensions[0]:
                     return True
                 else:
@@ -80,6 +82,7 @@ def check_tag_range(tag, tag_types):
             return False
     else:
         return False
+
 
 def get_tag_length(tag):
     """
@@ -96,7 +99,8 @@ def get_tag_length(tag):
         return int(tag[tag.find('{')+1:tag.find('}')])
     else:
         return 1
-    
+
+
 def get_tag_start_pos(tag):
     """
     Get the start position of the tag inputted if it has [].
@@ -111,7 +115,8 @@ def get_tag_start_pos(tag):
         return int(tag[tag.find('[')+1:tag.find(']')])
     else:
         return 0
-    
+
+
 def get_tag_type(tag, tag_types):
     """
     Get the data type of a tag.
@@ -134,6 +139,8 @@ def get_tag_type(tag, tag_types):
         return None
 
 # TODO: for lists, check the values in the list not the etire list
+
+
 def check_value_type(tag, value, tag_types):
     """
     Check the type of a value based on the tag and tag types.
@@ -183,6 +190,7 @@ def check_value_type(tag, value, tag_types):
                 return True
             except:
                 return False
+
 
 def check_value_length(tag, value, tag_types):
     """

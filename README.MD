@@ -4,27 +4,23 @@ PLC Tag Utility is designed to read, write, trend and monitor tags in Allen Brad
 
 INTERFACE
 
-The GUI uses a tabbed layout for the 4 features (read, write, trend and monitor) and has a common area to input the IP address and tag that will be read, written, trended or monitored. The right side of the window is where the results will be displayed. To faciliate faster communication, it is recommened to connect to the PLC with the connect button but it will still work without connecting first as the program will create a new connection for the function and close it afterwards when complete. If you do use the connect button, before closing the window, hit the same button which should now say disconnect to open up the connection. If you forget to, nothing bad will happen and it will eventually timeout on its own but if you do this too much you may have to wait to connect next time you use the utility.
+The GUI uses a tabbed layout for the 4 features (read, write, trend and monitor) and has a common area to input the IP address and tag that will be read, written, trended or monitored. The right side of the window is where the results will be displayed. Before closing the window, hit the same button which should now say disconnect to close up the connection. If you forget to, nothing bad will happen and it will eventually timeout on its own but if you do this too much you may have to wait to connect next time you use the utility.
 
 TAG FORMATTING
 
 When entering a tag into the tag input box, it is important to format the tag in the proper way.
 
-For tags that are arrays you can specify the number of members in the array to be read and what member to start at. The number of members to read should be enclosed in curly brackets at the end of the tag (My_Array{x}), the member to start at is enclosed in square brackets (My_Array[x]) and combined they will indicate which member to start at and how many to read. If either are omitted in a tag that is an array, they defualt to start at the first member and read only 1 member so My_Array would default to My_Array[0]{1}.
+For tags that are arrays you can specify the number of members in the array to be read and what member to start at. The number of members to read should be enclosed in curly brackets at the end of the tag (My_Array{x}), the member to start at is enclosed in square brackets (My_Array[x]) and combined they will indicate which member to start at and how many to read. If either are omitted for a tag that is an array, they defualt to start at the first member and read only 1 member so My_Array would default to My_Array[0]{1}.
 
 If the tag is not an array there is nothing needed and you may simply input the tag name.
 
-You also have the ability to enter more than one tag if you wish but you must seperate them by commas.
+You also have the ability to enter more than one tag if you wish but you must seperate them by commas. A better way to do this is to add the tag to the tag list in the read tab which allows you to have a set of tags read when you press the read list button.
 
-If you want to read a UDT you do not have to format the tag in any special way but if you only want to read one of the child tags in a UDT you can enter that just like you would use it in your logic and use dot notation (My_UDT.ChildTag).
+If you want to read a UDT or AOI you do not have to format the tag in any special way but threre cannot be anything that doesn't have extrnal access enabled. If you only want to read one of the child tags in a UDT or AOI you can enter that just like you would use it in your logic and use dot notation (My_UDT.ChildTag).
 
 VALUE FORMATTING WHEN WRITING
 
-When writting tags, you will enter the tag or tags you wish to write to and then in the value input box you enter the values seperating them by commas if there are multiple tags to write to.
-
-You can write to UDTs but must format the value in a specific way. It is recommended to read the UDT and have it save to a YAML file to manipulate and then write from that file as it is much simpler that way but if you insist on not going that direction you will have to format the value as python dictionaries. Python dictionaries are key/value pairs where the value can be another dictionary if there are nested UDTs in your parent UDT.
-
-For example, if you have a UDT with 2 DINTs and a BOOL, your value you would enter would be {'Dint1': x, 'Dint2': x, 'Bool': True} and if that UDT was nested in another UDT with a DINT you would enter {'AntherDint': x, 'NestedUDT': {'Dint1': x, 'Dint2': x, 'Bool': True}}.
+When writting tags, you will enter the tag you wish to write to and then in the write tab, you have to press the generate structure button. This performs a read on the tag to both ensure that it exists and to get the structure in the tree to edit with your new values. Without this, the formatting to write to any non-atomic tag would be difficult and very error prone.
 
 YAML
 

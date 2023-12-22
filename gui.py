@@ -4,7 +4,7 @@ import time
 from pycomm3 import LogixDriver
 import json
 from functools import wraps
-#from offline_read import LogixDriver
+# from offline_read import LogixDriver
 from PySide6.QtCharts import QChart, QChartView, QLineSeries
 import qdarktheme
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QRegularExpression, QSettings, QPointF
@@ -51,6 +51,8 @@ tag_dimensions = None
 plc = None
 
 # decorators
+
+
 def check_plc_connection_decorator(func):
     """
     A decorator to check if the PLC is connected before executing the function.
@@ -67,10 +69,13 @@ def check_plc_connection_decorator(func):
         if check_plc_connection(plc, main_window):
             return func(*args, **kwargs)
         else:
-            main_window.print_results(f"Error: No connection to PLC.<br>", 'red')
+            main_window.print_results(
+                f"Error: No connection to PLC.<br>", 'red')
     return wrapper
 
 # checks if the tag is a tag in the tag list
+
+
 def check_tag_decorator(func):
     """
     A decorator to check if the tag is a tag in the tag list.
@@ -82,9 +87,8 @@ def check_tag_decorator(func):
         function: The decorated function.
     """
     @wraps(func)
-
     def wrapper(*args, **kwargs):
-    
+
         main_window = get_main_window()
 
         tag = main_window.tag_input.text()
@@ -92,8 +96,10 @@ def check_tag_decorator(func):
         if input_checks.check_tag_range(tag, tag_types):
             return func(*args, **kwargs)
         else:
-            main_window.print_results(f"Error: Tag range incorrect.<br>", 'red')
+            main_window.print_results(
+                f"Error: Tag range incorrect.<br>", 'red')
     return wrapper
+
 
 def check_value_decorator(func):
     """
@@ -115,10 +121,13 @@ def check_value_decorator(func):
             if input_checks.check_value_type(tag, value, tag_types):
                 return func(*args, **kwargs)
             else:
-                main_window.print_results(f"Error: Value type does not match tag type.<br>", 'red')
+                main_window.print_results(
+                    f"Error: Value type does not match tag type.<br>", 'red')
         else:
-            main_window.print_results(f"Error: Value length out of tag bounds.<br>", 'red')
+            main_window.print_results(
+                f"Error: Value length out of tag bounds.<br>", 'red')
     return wrapper
+
 
 def connect_to_plc(ip, connect_button, main_window):
     """
@@ -156,14 +165,17 @@ def connect_to_plc(ip, connect_button, main_window):
                 main_window.set_autocomplete()
                 connect_button.setText("Disconnect")
                 plc.get_plc_name()
-                main_window.menu_status.setText(f"Connected to {plc.get_plc_name()} at {ip}")
+                main_window.menu_status.setText(
+                    f"Connected to {plc.get_plc_name()} at {ip}")
 
             main_window.start_plc_connection_check()
             main_window.enable_buttons()
             main_window.showConnectedDialog()
         except:
             plc = None
-            main_window.print_results(f"Error: Could not connect to PLC at {ip}.<br>", 'red')
+            main_window.print_results(
+                f"Error: Could not connect to PLC at {ip}.<br>", 'red')
+
 
 def check_plc_connection(plc, main_window):
     """
@@ -184,7 +196,8 @@ def check_plc_connection(plc, main_window):
             except:
                 main_window.stop_plc_connection_check()
                 plc = None
-                main_window.print_results(f"Lost connection to PLC.<br>", 'red')
+                main_window.print_results(
+                    f"Lost connection to PLC.<br>", 'red')
                 return False
         else:
             main_window.stop_plc_connection_check()
@@ -380,8 +393,9 @@ def read_tag(tag_names, plc, result_window, **kwargs):
         if len(tag_names) == 1:
             result_window.print_results(f'Reading Tag: {tag_names[0]}<br>')
         else:
-            result_window.print_results(f'Reading Tags: {", " .join(tag_names)}<br>')
-        
+            result_window.print_results(
+                f'Reading Tags: {", " .join(tag_names)}<br>')
+
         # get the tag data from the PLC
         read_result = plc.read(*tag_names)
 
@@ -399,15 +413,18 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                 # check if tag has {}
                 if re.search(r'\{[^}]*\}', entry_tag):
                     tag_name_formatted = re.sub(pattern, '', entry_tag)
-                    tag_name_formatted = re.sub(r'\[\d+\]', '', tag_name_formatted)
+                    tag_name_formatted = re.sub(
+                        r'\[\d+\]', '', tag_name_formatted)
                 else:
                     tag_name_formatted = entry_tag
 
                 value = read_result.value
-                tag_data.append(crawl_and_format(value, tag_name_formatted, {}, start_index))
+                tag_data.append(crawl_and_format(
+                    value, tag_name_formatted, {}, start_index))
                 if isinstance(value, list):
                     for i, v in enumerate(value):
-                        tree_data.append({f'{tag_name_formatted}[{i + start_index}]': v})
+                        tree_data.append(
+                            {f'{tag_name_formatted}[{i + start_index}]': v})
                 else:
                     tree_data.append({tag_name_formatted: value})
             else:
@@ -427,34 +444,42 @@ def read_tag(tag_names, plc, result_window, **kwargs):
 
                     if re.search(r'\{[^}]*\}', entry_tag):
                         tag_name_formatted = re.sub(pattern, '', entry_tag)
-                        tag_name_formatted = re.sub(r'\[\d+\]', '', tag_name_formatted)
+                        tag_name_formatted = re.sub(
+                            r'\[\d+\]', '', tag_name_formatted)
                     else:
                         tag_name_formatted = entry_tag
 
                     value = read_result[i].value
-                    tag_data.append(crawl_and_format(value, tag_name_formatted, {}, start_index))
+                    tag_data.append(crawl_and_format(
+                        value, tag_name_formatted, {}, start_index))
                     if isinstance(value, list):
                         for y, v in enumerate(value):
-                            
+
                             # check if tag has {}
                             if re.search(r'\{[^}]*\}', entry_tag):
-                                tag_name_formatted = re.sub(pattern, '', entry_tag)
-                                tag_name_formatted = re.sub(r'\[\d+\]', '', tag_name_formatted)
+                                tag_name_formatted = re.sub(
+                                    pattern, '', entry_tag)
+                                tag_name_formatted = re.sub(
+                                    r'\[\d+\]', '', tag_name_formatted)
                             else:
                                 tag_name_formatted = entry_tag
 
-                            tree_data.append({f'{tag_name_formatted}[{y + start_index}]': v})
+                            tree_data.append(
+                                {f'{tag_name_formatted}[{y + start_index}]': v})
                     else:
                         # check if tag has {}
                         if re.search(r'\{[^}]*\}', tag_names[i]):
-                            tag_name_formatted = re.sub(pattern, '', tag_names[i])
-                            tag_name_formatted = re.sub(r'\[\d+\]', '', tag_name_formatted)
+                            tag_name_formatted = re.sub(
+                                pattern, '', tag_names[i])
+                            tag_name_formatted = re.sub(
+                                r'\[\d+\]', '', tag_name_formatted)
                         else:
                             tag_name_formatted = entry_tag
 
                         tree_data.append({tag_name_formatted: value})
                 else:
-                    result_window.print_results(f"Error: {read_result[i].error}", 'red')
+                    result_window.print_results(
+                        f"Error: {read_result[i].error}", 'red')
 
         if store_to_file:
             if file_selection == 0:
@@ -463,10 +488,12 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                 data = data_to_dict(read_result)
                 data = [flatten_dict(item) for item in data]
                 write_to_csv(data, file_name)
-                
-            result_window.print_results(f'Successfully wrote to file: {file_name}<br>')
 
-        result_window.add_to_tree(tree_data, result_window.tree.invisibleRootItem(), True)
+            result_window.print_results(
+                f'Successfully wrote to file: {file_name}<br>')
+
+        result_window.add_to_tree(
+            tree_data, result_window.tree.invisibleRootItem(), True)
 
         results_to_print = ''
 
@@ -544,7 +571,7 @@ def extract_child_data_types(structure, array, name):
             if child_data_type['name'] == 'STRING':
                 array[full_tag_name] = {
                     'data_type': child_data_type['name'],
-                    'dimensions': [child_array_length, 0, 0 ],
+                    'dimensions': [child_array_length, 0, 0],
                     'structure': False
                 }
             else:
@@ -676,13 +703,14 @@ def write_tag(tags, values, main_window, plc, **kwargs):
         write_data = []
 
         for i, tag in enumerate(tags):
-            #write_data.append((tag, set_data_type(values[i], tag)))
+            # write_data.append((tag, set_data_type(values[i], tag)))
             write_data.append((tag, values[i]))
 
         try:
             write_result = plc.write(*write_data)
             if write_result:
-                main_window.print_results(f"Successfully wrote to tags to PLC<br>")
+                main_window.print_results(
+                    f"Successfully wrote to tags to PLC<br>")
             else:
                 main_window.print_results(f'{write_result.error}<br>', 'red')
         except Exception as e:
@@ -697,12 +725,14 @@ def write_tag(tags, values, main_window, plc, **kwargs):
         try:
             write_result = plc.write(*tags)
             if write_result:
-                main_window.print_results(f"Successfully wrote to tags to PLC<br>")
+                main_window.print_results(
+                    f"Successfully wrote to tags to PLC<br>")
             else:
                 main_window.print_results(f'{write_result.error}<br>', 'red')
         except Exception as e:
             print(f"Error in write_tag: {e}")
             return None
+
 
 def process_trend_data(tag, results, timestamps, single_tag, file_enabled, file_name, file_format):
     """
@@ -796,7 +826,8 @@ def flatten_dict(d, parent_key='', sep='.'):
         elif isinstance(v, list):
             for i, item in enumerate(v):
                 if isinstance(item, dict):
-                    items.extend(flatten_dict(item, f"{new_key}[{i}]", sep=sep).items())
+                    items.extend(flatten_dict(
+                        item, f"{new_key}[{i}]", sep=sep).items())
                 else:
                     items.append((f"{new_key}[{i}]", item))
         else:
@@ -821,11 +852,12 @@ def write_to_csv(data, csv_file):
             for tag, value in item.items():
                 writer.writerow({'tag': tag, 'value': value})
 
+
 @check_plc_connection_decorator
 def get_structure_for_value_tree(tag, main_window):
     main_window.value_tree.clear()
-    
-    #check if the tag is an array
+
+    # check if the tag is an array
     if '{' in tag or '}' in tag:
         # get the number of elements in the array
         num = re.search(r'\{(\d+)\}', main_window.tag_input.text()).group(1)
@@ -842,9 +874,12 @@ def get_structure_for_value_tree(tag, main_window):
             start_index = 0
 
         for i in range(int(num)):
-            main_window.add_data_to_write_tree(main_window.value_tree, f'{tag}[{start_index + i}]', plc.read(tag).value)
+            main_window.add_data_to_write_tree(
+                main_window.value_tree, f'{tag}[{start_index + i}]', plc.read(tag).value)
     else:
-        main_window.add_data_to_write_tree(main_window.value_tree, tag, plc.read(tag).value)
+        main_window.add_data_to_write_tree(
+            main_window.value_tree, tag, plc.read(tag).value)
+
 
 class Trender(QObject):
     """
@@ -909,7 +944,7 @@ class Trender(QObject):
         while self.running:
 
             self.tag_data = []
-            
+
             try:
                 result = self.plc.read(*self.formatted_tags)
 
@@ -928,7 +963,8 @@ class Trender(QObject):
                     f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}<br>', 'white')
 
                 if self.single_tag:
-                    self.tag_data = crawl_and_format(result[0].value, self.formatted_tags[0], {})
+                    self.tag_data = crawl_and_format(
+                        result[0].value, self.formatted_tags[0], {})
                     for tag, value in self.tag_data.items():
                         self.update.emit(f'{tag} = {value}', 'yellow')
                     self.results[0].append(result[0].value)
@@ -937,17 +973,17 @@ class Trender(QObject):
                     self.update.emit('', 'white')
                 else:
                     for i, r in enumerate(result):
-                        self.tag_data.append(crawl_and_format(r.value, self.formatted_tags[i], {}))
+                        self.tag_data.append(crawl_and_format(
+                            r.value, self.formatted_tags[i], {}))
                         self.results[i].append(r.value)
 
                     self.main_window.add_to_tree(
                         {self.formatted_tags[i]: r.value}, self.main_window.tree.invisibleRootItem())
-                        
+
                     for result in self.tag_data:
                         for tag, value in result.items():
                             self.update.emit(f'{tag} = {value}', 'yellow')
-                    
-                    
+
                     self.update.emit('', 'white')
 
                 self.timestamps.append(
@@ -1061,20 +1097,20 @@ class Monitorer(QObject):
                                           ] = tag_result.value
                                 self.update.emit(
                                     f'{self.read_write_tag_list[i]} = {tag_result.value}', 'yellow')
-                                
+
                                 self.main_window.add_to_tree(
                                     {self.read_write_tag_list[i]: tag_result.value}, self.main_window.tree.invisibleRootItem())
-                            
+
                             self.update.emit('', 'white')
                         else:
                             yaml_temp[self.read_write_tag_list[0]
                                       ] = read_event_results.value
                             self.update.emit(
                                 f'{self.read_write_tag_list[0]} = {read_event_results.value}', 'yellow')
-                            
+
                             self.main_window.add_to_tree(
                                 {self.read_write_tag_list[0]: read_event_results.value}, self.main_window.tree.invisibleRootItem())
-                            
+
                         self.update.emit('', 'white')
 
                         self.yaml_data.append(yaml_temp)
@@ -1126,10 +1162,10 @@ class Monitorer(QObject):
                                               ] = tag_result.value
                                     self.update.emit(
                                         f'{self.read_write_tag_list[i]} = {tag_result.value}', 'yellow')
-                                    
+
                                     self.main_window.add_to_tree(
                                         {self.read_write_tag_list[i]: tag_result.value}, self.main_window.tree.invisibleRootItem())
-                                    
+
                                 self.update.emit('', 'white')
                             else:
                                 yaml_temp[self.read_write_tag_list[0]
@@ -1137,7 +1173,7 @@ class Monitorer(QObject):
                                 self.update.emit(
                                     f'{self.read_write_tag_list[0]} = {read_event_results.value}', 'yellow')
                                 self.update.emit('', 'white')
-                                
+
                                 self.main_window.add_to_tree(
                                     {self.read_write_tag_list[0]: read_event_results.value}, self.main_window.tree.invisibleRootItem())
 
@@ -1244,19 +1280,18 @@ class HelpWindow(QWidget):
             <h2>Notes</h2>\
             <p>This app was developed as a side project and there will be bugs from time to time. If you find a bug, please report it to me so I can fix it. I am also open to suggestions for new features.</p>\
             <p>Thanks for using my app!</p>'\
-        
-        
+
+
         self.text_browser.setOpenExternalLinks(True)
         self.text_browser.setHtml(text)
 
-        #self.text_browser.setLineWrapMode(QTextEdit.NoWrap)
+        # self.text_browser.setLineWrapMode(QTextEdit.NoWrap)
         self.text_browser.setReadOnly(True)
         self.text_browser.setAlignment(Qt.AlignCenter)
 
-
-
         layout.addWidget(self.text_browser)
         self.setLayout(layout)
+
 
 class PlotWindow(QWidget):
     """
@@ -1281,7 +1316,7 @@ class PlotWindow(QWidget):
         self.layout = QVBoxLayout()
         self.group_box = QGroupBox("Tags")
         self.group_box.setLayout(QVBoxLayout())
-        
+
         self.plot_button = QPushButton("Plot")
 
         for tag in self.tags:
@@ -1298,8 +1333,8 @@ class PlotWindow(QWidget):
 
             self.checkboxes.append(checkbox)
             self.group_box.layout().addWidget(checkbox)
-            #self.layout.addWidget(checkbox)
-        
+            # self.layout.addWidget(checkbox)
+
         self.layout.addWidget(self.group_box)
         self.layout.addWidget(self.plot_button)
 
@@ -1327,8 +1362,9 @@ class PlotWindow(QWidget):
             msgBox.setStandardButtons(QMessageBox.Ok)
 
             returnValue = msgBox.exec()
-        else:     
+        else:
             self.show_chart_window(checked_tags, results, timestamps)
+
 
 class ToolTip(QGraphicsTextItem):
     def __init__(self, parent=None):
@@ -1338,14 +1374,15 @@ class ToolTip(QGraphicsTextItem):
     def updateText(self, point):
         self.setPlainText(f"{point.x()}: {point.y()}")
         self.setVisibile(True)
-                          
+
+
 class CustomChartView(QChartView):
     def __init__(self, chart, parent=None):
         super().__init__(chart, parent)
         self.tooltip = ToolTip()
         chart.scene().addItem(self.tooltip)
         self.tooltip.hide()
-    
+
     def mouseMoveEvent(self, event: QMouseEvent):
         chart_pos = self.chart().mapToValue(event.position())
 
@@ -1357,16 +1394,17 @@ class CustomChartView(QChartView):
                 dy = point.y() - chart_pos.y()
                 distance = (dx**2 + dy**2)**0.5
                 if distance < 2:
-                    self.tooltip.setPos(event.position().x(), event.position().y())
+                    self.tooltip.setPos(
+                        event.position().x(), event.position().y())
                     self.tooltip.updateText(point)
                     return
         self.tooltip.hide()
         super().mouseMoveEvent(event)
 
+
 class TrendChart(QMainWindow):
     def __init__(self, tags, results, timestamps):
         super().__init__()
-
 
         self.chart = QChart()
         self.chart.setTheme(QChart.ChartThemeDark)
@@ -1382,10 +1420,10 @@ class TrendChart(QMainWindow):
             for x, result in enumerate(results[i]):
                 if result < min:
                     min = result
-                
+
                 if result > max:
                     max = result
-                
+
                 self.series.append(timestamps[x], result)
 
             self.series_list.append(self.series)
@@ -1422,7 +1460,7 @@ class MainWindow(QMainWindow):
         self.chart_window.resize(600, 600)
         self.plot_setup_window.close()
         self.chart_window.show()
-        
+
     def show_about_window(self):
         if self.about_window is None:
             self.about_window = AboutWindow()
@@ -1574,7 +1612,7 @@ class MainWindow(QMainWindow):
         self.write_button = QPushButton("Write")
         self.generate_button = QPushButton("Generate Stucture")
         self.write_value = QLineEdit()
-        
+
         self.value_tree = QTreeWidget()
         self.value_tree.setColumnCount(2)
         self.value_tree.setHeaderLabels(['Tag', 'Value'])
@@ -1587,8 +1625,6 @@ class MainWindow(QMainWindow):
         write_tab_layout.addWidget(self.generate_button)
         write_tab_layout.addWidget(self.value_tree)
         write_tab_layout.addWidget(self.write_button)
-
-
 
         # --------------------------------------------#
         #                  TREND TAB                  #
@@ -1803,13 +1839,14 @@ class MainWindow(QMainWindow):
         # Connect read button to read_tag function
         self.read_button.clicked.connect(self.read_tag_button_clicked)
 
-        self.generate_button.clicked.connect(lambda: get_structure_for_value_tree(self.tag_input.text(), self))
+        self.generate_button.clicked.connect(
+            lambda: get_structure_for_value_tree(self.tag_input.text(), self))
 
-        #self.write_button.clicked.connect(self.write_tag_button_clicked)
-        self.write_button.clicked.connect(self.write_tag)
+        self.write_button.clicked.connect(self.write_tag_button_clicked)
 
         self.trend_button.clicked.connect(self.trender_thread)
-        self.trend_plot_button.clicked.connect(lambda: self.show_plot_setup_window(self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
+        self.trend_plot_button.clicked.connect(lambda: self.show_plot_setup_window(
+            self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
         self.monitor_button.clicked.connect(self.monitorer_thread)
         self.connect_button.clicked.connect(self.connect_button_clicked)
         self.file_browser.clicked.connect(
@@ -1855,13 +1892,16 @@ class MainWindow(QMainWindow):
         self.results.clear()
 
     def save_tree_to_file(self):
-        file_name = QFileDialog.getSaveFileName(self, 'Save File', '', 'YAML (*.yaml);;CSV (*.csv)')
+        file_name = QFileDialog.getSaveFileName(
+            self, 'Save File', '', 'YAML (*.yaml);;CSV (*.csv)')
         if file_name[0] != '':
             if file_name[1] == 'YAML (*.yaml)':
                 with open(file_name[0], 'w') as file:
-                    yaml.dump(self.get_data_from_tree(self.tree.invisibleRootItem()), file)
+                    yaml.dump(self.get_data_from_tree(
+                        self.tree.invisibleRootItem()), file)
             elif file_name[1] == 'CSV (*.csv)':
-                tree_dict = self.get_data_from_tree(self.tree.invisibleRootItem())
+                tree_dict = self.get_data_from_tree(
+                    self.tree.invisibleRootItem())
 
                 write_to_csv([flatten_dict(tree_dict)], file_name[0])
 
@@ -1877,7 +1917,7 @@ class MainWindow(QMainWindow):
             else:
                 data[child.text(0)] = child.text(1)
         return data
-    
+
     def convert_write_values(self, data, name):
         if isinstance(data, dict):
             return {key: self.convert_write_values(value, f'{name}.{key}') for key, value in data.items()}
@@ -1885,7 +1925,7 @@ class MainWindow(QMainWindow):
             return [self.convert_write_values(value, name) for value in data]
         else:
             return set_data_type(data, name)
-    
+
     def add_data_to_write_tree(self, parent, tag, value):
         if isinstance(value, dict):
             item = QTreeWidgetItem(parent, [tag, ''])
@@ -1904,37 +1944,10 @@ class MainWindow(QMainWindow):
         self.value_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.value_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
 
-    def write_tag(self):
-
-        data = self.get_value_tree_data(self.value_tree.invisibleRootItem())
-
-        tags = []
-        formatted_tags = []
-        values = []
-
-        for key, value in data.items():
-
-            tags.append(key)
-
-            # remove the [] from the tag name
-            key = re.sub(r'\[\d+\]', '', key)
-
-            formatted_tags.append(key)
-
-            values.append(self.convert_write_values(value, key))
-
-
-        if len(tags) == 1:
-            tags = tags[0]
-            values = values[0]
-            formatted_tags = formatted_tags[0]
-
-        write_tag(tags, values, self, plc)
-
     def get_value_tree_data(self, parent):
         if parent.childCount() == 0:
             return parent.text(1)
-        
+
         data = {}
 
         parent_name = parent.text(0)
@@ -1955,7 +1968,7 @@ class MainWindow(QMainWindow):
                     data[tag] = child_data
 
         if _list != []:
-            data = _list 
+            data = _list
 
         return data
 
@@ -1992,7 +2005,8 @@ class MainWindow(QMainWindow):
                                             parent, [f'{key}[{i}]', str(v)])
                                         self.add_to_tree(v, new_item)
                             else:
-                                new_item = QTreeWidgetItem(parent, [key, str(value)])
+                                new_item = QTreeWidgetItem(
+                                    parent, [key, str(value)])
                 if isinstance(data, list):
                     for i, value in enumerate(data):
                         if isinstance(value, dict):
@@ -2009,7 +2023,8 @@ class MainWindow(QMainWindow):
                                         parent, [f'{i}[{j}]', str(v)])
                                     self.add_to_tree(v, new_item)
                         else:
-                            new_item = QTreeWidgetItem(parent, [f'{i}', str(value)])
+                            new_item = QTreeWidgetItem(
+                                parent, [f'{i}', str(value)])
         else:
             if isinstance(data, dict):
                 for key, value in data.items():
@@ -2035,7 +2050,8 @@ class MainWindow(QMainWindow):
                                         parent, [f'{key}[{i}]', str(v)])
                                     self.add_to_tree(v, new_item)
                         else:
-                            new_item = QTreeWidgetItem(parent, [key, str(value)])
+                            new_item = QTreeWidgetItem(
+                                parent, [key, str(value)])
             if isinstance(data, list):
                 for i, value in enumerate(data):
                     if isinstance(value, dict):
@@ -2052,7 +2068,8 @@ class MainWindow(QMainWindow):
                                     parent, [f'{i}[{j}]', str(v)])
                                 self.add_to_tree(v, new_item)
                     else:
-                        new_item = QTreeWidgetItem(parent, [f'{i}', str(value)])
+                        new_item = QTreeWidgetItem(
+                            parent, [f'{i}', str(value)])
 
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
@@ -2140,7 +2157,8 @@ class MainWindow(QMainWindow):
                                 self.print_results(
                                     "Tag already in list.", 'red')
                     else:
-                        self.print_results(f"{tag} does not exist in PLC.", 'red')
+                        self.print_results(
+                            f"{tag} does not exist in PLC.", 'red')
                 else:
                     self.print_results("Tag input: '{tag}' is invalid.", 'red')
         else:
@@ -2257,7 +2275,7 @@ class MainWindow(QMainWindow):
                 file_name = file_name + '.csv'
 
         return file_name
-    
+
     @check_tag_decorator
     @check_plc_connection_decorator
     def read_tag_button_clicked(self):
@@ -2309,39 +2327,64 @@ class MainWindow(QMainWindow):
     def write_tag_button_clicked(self):
         if self.tag_input.hasAcceptableInput():
             if self.is_valid_tag_input(self.tag_input.text(), tag_types):
-                self.save_history()
-                if self.file_name.text() != '':
-                    file_name = self.check_and_convert_file_name()
-                    write_tag(self.tag_input.text(), self.write_value.text(
-                    ), self, plc, file_enabled=self.file_enabled.isChecked(), file_name=file_name, file_selection=self.file_format)
+                if self.file_enabled.isChecked():
+                    if self.file_name.text() != '':
+                        file_name = self.check_and_convert_file_name()
+                        write_tag(self.tag_input.text(), self.write_value.text(
+                        ), self, plc, file_enabled=True, file_name=file_name, file_selection=self.file_format)
+                    else:
+                        write_tag(self.tag_input.text(), self.write_value.text(
+                        ), self, plc, file_enabled=True, file_selection=self.file_format)
                 else:
-                    write_tag(self.tag_input.text(), self.write_value.text(
-                    ), self, plc, file_enabled=self.file_enabled.isChecked(), file_selection=self.file_format)
+                    data = self.get_value_tree_data(
+                        self.value_tree.invisibleRootItem())
+
+                    tags = []
+                    formatted_tags = []
+                    values = []
+
+                    for key, value in data.items():
+
+                        tags.append(key)
+
+                        # remove the [] from the tag name
+                        key = re.sub(r'\[\d+\]', '', key)
+
+                        formatted_tags.append(key)
+
+                        values.append(self.convert_write_values(value, key))
+
+                    if len(tags) == 1:
+                        tags = tags[0]
+                        values = values[0]
+                        formatted_tags = formatted_tags[0]
+
+                    write_tag(tags, values, self, plc)
             else:
                 self.print_results("Tag or tags do not exist in PLC.", 'red')
         else:
             self.print_results("Tag input is invalid.", 'red')
 
-            
     def verify_write_values(self):
         if not self.write_value.text() == '':
             values = [v.strip() for v in self.write_value.text().split(',')]
             tags = [t.strip() for t in self.tag_input.text().split(',')]
-            
+
             if len(values) != len(tags):
-                self.print_results("Number of values does not match number of tags.<br>", 'red')
-            
+                self.print_results(
+                    "Number of values does not match number of tags.<br>", 'red')
+
             return True
         else:
             self.print_results("No value entered.<br>", 'red')
-            
 
     def print_results(self, results, color='white'):
-        
+
         cursor = self.results.textCursor()
         cursor.movePosition(QTextCursor.End)
-        
-        cursor.insertHtml(f"<span style='color: {color};'>{results}</span><br>")
+
+        cursor.insertHtml(
+            f"<span style='color: {color};'>{results}</span><br>")
         # set scroll bar to bottom
         self.results.verticalScrollBar().setValue(
             self.results.verticalScrollBar().maximum())
@@ -2379,7 +2422,8 @@ class MainWindow(QMainWindow):
                             self.trend_plot_button.setEnabled(True)
                             self.trend_button.setText("Stop Trend")
                     else:
-                        self.print_results("Tag or tags do not exist in PLC.", 'red')
+                        self.print_results(
+                            "Tag or tags do not exist in PLC.", 'red')
                 else:
                     self.print_results("Tag input is invalid.", 'red')
             else:
@@ -2449,7 +2493,8 @@ class MainWindow(QMainWindow):
                             self.monitor_thread.start()
                             self.monitor_button.setText("Stop Monitor")
                     else:
-                        self.print_results("Tag or tags do not exist in PLC.", 'red')
+                        self.print_results(
+                            "Tag or tags do not exist in PLC.", 'red')
                 else:
                     self.print_results("Tag input is invalid.", 'red')
             else:
@@ -2464,8 +2509,10 @@ class MainWindow(QMainWindow):
         self.menu_status.setText("Disconnected")
         self.disable_buttons()
 
+
 def get_main_window():
     return window
+
 
 app = QApplication(sys.argv)
 pixmap = QPixmap("splash.jpg")
