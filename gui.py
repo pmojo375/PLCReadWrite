@@ -638,41 +638,6 @@ def process_trend_data(tag, results, timestamps, single_tag, file_enabled, file_
                         writer.writerow(data)
 
 
-@check_plc_connection_decorator
-def get_structure_for_value_tree(tag, main_window):
-    main_window.value_tree.clear()
-
-    # check if the tag is an array
-    if '{' in tag or '}' in tag:
-        # get the number of elements in the array
-        num = re.search(r'\{(\d+)\}', main_window.tag_input.text()).group(1)
-
-        print(f'num: {num}')
-
-        # get the tag name without the array
-        tag = re.sub(r'\{\d+\}', '', main_window.tag_input.text())
-
-        print(f'tag: {tag}')
-
-        if '[' in tag or ']' in tag:
-            print('tag has []')
-            # get the start index of the array
-            start_index = int(re.search(r'\[(\d+)\]', tag).group(1))
-            print(f'start_index: {start_index}')
-            # get the tag name without the array
-            tag = re.sub(r'\[\d+\]', '', tag)
-            print(f'tag: {tag}')
-        else:
-            start_index = 0
-
-        for i in range(int(num)):
-            main_window.add_data_to_write_tree(
-                main_window.value_tree, f'{tag}[{start_index + i}]', plc.read(f'{tag}[{start_index + i}]').value)
-    else:
-        main_window.add_data_to_write_tree(
-            main_window.value_tree, tag, plc.read(tag).value)
-
-
 class Trender(QObject):
     """
     A class to read and update PLC tags and emit signals for GUI updates.
@@ -1632,7 +1597,7 @@ class MainWindow(QMainWindow):
         self.read_button.clicked.connect(self.read_tag_button_clicked)
 
         self.generate_button.clicked.connect(
-            lambda: get_structure_for_value_tree(self.tag_input.text(), self))
+            lambda: self.get_structure_for_value_tree(self.tag_input.text()))
 
         self.write_button.clicked.connect(self.write_tag_button_clicked)
 
@@ -1667,6 +1632,41 @@ class MainWindow(QMainWindow):
         self.populate_list_from_history()
 
         self.read_thread = QThread()
+    
+    @check_plc_connection_decorator
+    def get_structure_for_value_tree(self, tag):
+        self.value_tree.clear()
+
+        # check if the tag is an array
+        if '{' in tag or '}' in tag:
+            # get the number of elements in the array
+            num = re.search(r'\{(\d+)\}', self.tag_input.text()).group(1)
+
+            print(f'num: {num}')
+
+            # get the tag name without the array
+            tag = re.sub(r'\{\d+\}', '', self.tag_input.text())
+
+            print(f'tag: {tag}')
+
+            if '[' in tag or ']' in tag:
+                print('tag has []')
+                # get the start index of the array
+                start_index = int(re.search(r'\[(\d+)\]', tag).group(1))
+                print(f'start_index: {start_index}')
+                # get the tag name without the array
+                tag = re.sub(r'\[\d+\]', '', tag)
+                print(f'tag: {tag}')
+            else:
+                start_index = 0
+
+            for i in range(int(num)):
+                self.add_data_to_write_tree(
+                    self.value_tree, f'{tag}[{start_index + i}]', plc.read(f'{tag}[{start_index + i}]').value)
+        else:
+            self.add_data_to_write_tree(
+                self.value_tree, tag, plc.read(tag).value)
+
 
     def start_read_thread(self):
         self.read_thread.start()
