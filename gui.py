@@ -2,7 +2,7 @@ import sys
 import input_checks
 import time
 from pycomm3 import LogixDriver
-import json
+import file_helper
 from functools import wraps
 # from offline_read import LogixDriver
 from PySide6.QtCharts import QChart, QChartView, QLineSeries
@@ -33,7 +33,6 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QCompleter,
     QSplashScreen,
-    QToolTip,
     QGroupBox,
     QGraphicsTextItem,
 
@@ -49,9 +48,6 @@ import csv
 tag_types = None
 tag_dimensions = None
 plc = None
-
-# decorators
-
 
 def check_plc_connection_decorator(func):
     """
@@ -72,8 +68,6 @@ def check_plc_connection_decorator(func):
             main_window.print_results(
                 f"Error: No connection to PLC.<br>", 'red')
     return wrapper
-
-# checks if the tag is a tag in the tag list
 
 
 def check_tag_decorator(func):
@@ -98,34 +92,6 @@ def check_tag_decorator(func):
         else:
             main_window.print_results(
                 f"Error: Tag range incorrect.<br>", 'red')
-    return wrapper
-
-
-def check_value_decorator(func):
-    """
-    A decorator to check if the value is valid for the given tag.
-
-    Args:
-        func (function): The function to decorate.
-
-    Returns:
-        function: The decorated function.
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        main_window = get_main_window()
-        tag = main_window.tag_input.text()
-        value = main_window.write_value.text()
-
-        if input_checks.check_value_length(tag, value, tag_types):
-            if input_checks.check_value_type(tag, value, tag_types):
-                return func(*args, **kwargs)
-            else:
-                main_window.print_results(
-                    f"Error: Value type does not match tag type.<br>", 'red')
-        else:
-            main_window.print_results(
-                f"Error: Value length out of tag bounds.<br>", 'red')
     return wrapper
 
 
@@ -205,157 +171,6 @@ def check_plc_connection(plc, main_window):
     return False
 
 
-def serialize_to_yaml(data, **kwargs):
-    """
-    Serialize data to YAML format and write to a file.
-
-    Args:
-        data (list or object): The data to be serialized.
-        yaml_file (str, optional): The name of the file to write to. Defaults to 'tag_values.yaml'.
-
-    Returns:
-        None
-    """
-
-    yaml_file = kwargs.get('yaml_file', 'tag_values.yaml')
-
-    with open(yaml_file, 'w') as f:
-
-        data = data_to_dict(data)
-
-        yaml.safe_dump(data, f, default_flow_style=False)
-
-
-def data_to_dict(data):
-
-    processed_data = []
-
-    if isinstance(data, list):
-        for tag in data:
-            if isinstance(tag.value, list):
-                for i, value in enumerate(tag.value):
-                    processed_data.append({f'{tag.tag}[{str(i)}]': value})
-            else:
-                processed_data.append({tag.tag: tag.value})
-    else:
-        processed_data.append({data.tag: data.value})
-
-    return processed_data
-
-
-def deserialize_from_yaml(yaml_name):
-    """
-    Deserialize data from a YAML file and return a list of dictionaries containing tag-value pairs.
-
-    Args:
-    - yaml_name (str): The name of the YAML file to deserialize.
-
-    Returns:
-    - tag_values (list of dict): A list of dictionaries containing tag-value pairs.
-    """
-    with open(yaml_name, 'r') as f:
-        yaml_data = yaml.safe_load(f)
-        tag_values = []
-        for item in yaml_data:
-            for key, value in item.items():
-                tag_values.append({'tag': key, 'value': value})
-
-    return tag_values
-
-
-def iterate_value(name, value, ret):
-    """
-    Recursively iterates through a nested dictionary or list and returns a list of tuples containing the name and value of each leaf node.
-
-    Args:
-        name (str): The name of the current node.
-        value (dict or list): The value of the current node.
-        ret (list): The list to append the name-value tuples to.
-
-    Returns:
-        list: A list of tuples containing the name and value of each leaf node.
-    """
-    if type(value) == list:
-        for i, value in enumerate(value):
-            iterate_value(f'{name}[{i}]', value, ret)
-    elif type(value) == dict:
-        for key, value in value.items():
-            iterate_value(f'{name}.{key}', value, ret)
-    else:
-        ret.append((name, value))
-
-    return ret
-
-
-def process_yaml_read(data):
-    """
-    Processes YAML data and returns a list of processed data.
-
-    Args:
-        data (list): A list of YAML tags, where each tag is a dictionary with 'tag' and 'value' keys.
-
-    Returns:
-        list: A list of processed data.
-    """
-
-    processed_data = []
-
-    for tag in data:
-        tag_name = tag['tag']
-        tag_value = tag['value']
-
-        processed_data = iterate_value(tag_name, tag_value, processed_data)
-
-    return processed_data
-
-
-def process_csv_read(csv_file):
-    """
-    Processes CSV data and returns a list of processed data.
-
-    Args:
-        csv_file (str): The name of the CSV file to process.
-
-    Returns:
-        list: A list of processed data.
-    """
-    with open(csv_file, 'r') as f:
-        reader = csv.DictReader(f)
-        processed_data = []
-        for row in reader:
-            processed_data.append(
-                (row['tag'], set_data_type(row['value'], row['tag'])))
-    return processed_data
-
-
-def crawl_and_format(obj, name, data, start_index=0):
-    """
-    Recursively crawls through a dictionary or list and formats the data into a flattened dictionary.
-
-    Args:
-        obj (dict or list): The object to crawl through.
-        name (str): The name of the object.
-        data (dict): The flattened dictionary to store the formatted data.
-
-    Returns:
-        dict: The flattened dictionary with the formatted data.
-    """
-    # obj is a dictionary
-    if isinstance(obj, dict):
-        for key, value in obj.items():
-            data = crawl_and_format(value, f'{name}.{key}', data)
-    # obj is a list
-    elif isinstance(obj, list):
-        # iterate through the list
-        for i, value in enumerate(obj):
-            data = crawl_and_format(value, f'{name}[{i + start_index}]', data)
-    # obj is an elementary object
-    else:
-        data[f'{name}'] = f'{obj}'
-
-    return data
-
-
 def read_tag(tag_names, plc, result_window, **kwargs):
     """
     Reads the values of the given tags from the PLC with the given IP address and displays the results in the given result window.
@@ -419,7 +234,7 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                     tag_name_formatted = entry_tag
 
                 value = read_result.value
-                tag_data.append(crawl_and_format(
+                tag_data.append(file_helper.crawl_and_format(
                     value, tag_name_formatted, {}, start_index))
                 if isinstance(value, list):
                     for i, v in enumerate(value):
@@ -450,7 +265,7 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                         tag_name_formatted = entry_tag
 
                     value = read_result[i].value
-                    tag_data.append(crawl_and_format(
+                    tag_data.append(file_helper.crawl_and_format(
                         value, tag_name_formatted, {}, start_index))
                     if isinstance(value, list):
                         for y, v in enumerate(value):
@@ -483,11 +298,11 @@ def read_tag(tag_names, plc, result_window, **kwargs):
 
         if store_to_file:
             if file_selection == 0:
-                serialize_to_yaml(read_result, yaml_file=file_name)
+                file_helper.serialize_to_yaml(read_result, yaml_file=file_name)
             elif file_selection == 1:
-                data = data_to_dict(read_result)
-                data = [flatten_dict(item) for item in data]
-                write_to_csv(data, file_name)
+                data = file_helper.data_to_dict(read_result)
+                data = [file_helper.flatten_dict(item) for item in data]
+                file_helper.write_to_csv(data, file_name)
 
             result_window.print_results(
                 f'Successfully wrote to file: {file_name}<br>')
@@ -718,9 +533,15 @@ def write_tag(tags, values, main_window, plc, **kwargs):
             return None
     else:
         if file_selection == 0:
-            tags = process_yaml_read(deserialize_from_yaml(file_name))
+            tags = file_helper.process_yaml_read(file_helper.deserialize_from_yaml(file_name))
         elif file_selection == 1:
-            tags = process_csv_read(file_name)
+            _tags = file_helper.process_csv_read(file_name)
+
+            tags = []
+
+            # format tag values to their proper values
+            for i in _tags:
+                tags.append((i[0], set_data_type(i[1], i[0])))
 
         try:
             write_result = plc.write(*tags)
@@ -817,42 +638,6 @@ def process_trend_data(tag, results, timestamps, single_tag, file_enabled, file_
                         writer.writerow(data)
 
 
-def flatten_dict(d, parent_key='', sep='.'):
-    items = []
-    for k, v in d.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_dict(v, new_key, sep=sep).items())
-        elif isinstance(v, list):
-            for i, item in enumerate(v):
-                if isinstance(item, dict):
-                    items.extend(flatten_dict(
-                        item, f"{new_key}[{i}]", sep=sep).items())
-                else:
-                    items.append((f"{new_key}[{i}]", item))
-        else:
-            items.append((new_key, v))
-    return dict(items)
-
-
-def yaml_to_csv(yaml_file, csv_file):
-    with open(yaml_file, 'r') as jf:
-        data = yaml.safe_load(jf)
-
-    flattened_data = [flatten_dict(item) for item in data]
-
-    write_to_csv(flattened_data, csv_file)
-
-
-def write_to_csv(data, csv_file):
-    with open(csv_file, 'w', newline='') as cf:
-        writer = csv.DictWriter(cf, fieldnames=['tag', 'value'])
-        writer.writeheader()
-        for item in data:
-            for tag, value in item.items():
-                writer.writerow({'tag': tag, 'value': value})
-
-
 @check_plc_connection_decorator
 def get_structure_for_value_tree(tag, main_window):
     main_window.value_tree.clear()
@@ -862,20 +647,27 @@ def get_structure_for_value_tree(tag, main_window):
         # get the number of elements in the array
         num = re.search(r'\{(\d+)\}', main_window.tag_input.text()).group(1)
 
+        print(f'num: {num}')
+
         # get the tag name without the array
         tag = re.sub(r'\{\d+\}', '', main_window.tag_input.text())
 
+        print(f'tag: {tag}')
+
         if '[' in tag or ']' in tag:
+            print('tag has []')
             # get the start index of the array
             start_index = int(re.search(r'\[(\d+)\]', tag).group(1))
+            print(f'start_index: {start_index}')
             # get the tag name without the array
             tag = re.sub(r'\[\d+\]', '', tag)
+            print(f'tag: {tag}')
         else:
             start_index = 0
 
         for i in range(int(num)):
             main_window.add_data_to_write_tree(
-                main_window.value_tree, f'{tag}[{start_index + i}]', plc.read(tag).value)
+                main_window.value_tree, f'{tag}[{start_index + i}]', plc.read(f'{tag}[{start_index + i}]').value)
     else:
         main_window.add_data_to_write_tree(
             main_window.value_tree, tag, plc.read(tag).value)
@@ -963,7 +755,7 @@ class Trender(QObject):
                     f'Timestamp: {datetime.datetime.now().strftime("%I:%M:%S:%f %p")}<br>', 'white')
 
                 if self.single_tag:
-                    self.tag_data = crawl_and_format(
+                    self.tag_data = file_helper.crawl_and_format(
                         result[0].value, self.formatted_tags[0], {})
                     for tag, value in self.tag_data.items():
                         self.update.emit(f'{tag} = {value}', 'yellow')
@@ -973,7 +765,7 @@ class Trender(QObject):
                     self.update.emit('', 'white')
                 else:
                     for i, r in enumerate(result):
-                        self.tag_data.append(crawl_and_format(
+                        self.tag_data.append(file_helper.crawl_and_format(
                             r.value, self.formatted_tags[i], {}))
                         self.results[i].append(r.value)
 
@@ -1903,7 +1695,7 @@ class MainWindow(QMainWindow):
                 tree_dict = self.get_data_from_tree(
                     self.tree.invisibleRootItem())
 
-                write_to_csv([flatten_dict(tree_dict)], file_name[0])
+                file_helper.write_to_csv([file_helper.flatten_dict(tree_dict)], file_name[0])
 
     def clear_tree(self):
         self.tree.clear()
@@ -2321,49 +2113,54 @@ class MainWindow(QMainWindow):
         else:
             self.print_results("Tag or tags do not exist in PLC.", 'red')
 
-    @check_tag_decorator
     @check_plc_connection_decorator
-    @check_value_decorator
     def write_tag_button_clicked(self):
+        if self.file_enabled.isChecked():
+            self.write_from_file()
+        else:
+            self.write_from_tree()
+
+    def write_from_file(self):
         if self.tag_input.hasAcceptableInput():
             if self.is_valid_tag_input(self.tag_input.text(), tag_types):
-                if self.file_enabled.isChecked():
-                    if self.file_name.text() != '':
-                        file_name = self.check_and_convert_file_name()
-                        write_tag(self.tag_input.text(), self.write_value.text(
-                        ), self, plc, file_enabled=True, file_name=file_name, file_selection=self.file_format)
-                    else:
-                        write_tag(self.tag_input.text(), self.write_value.text(
-                        ), self, plc, file_enabled=True, file_selection=self.file_format)
+                if self.file_name.text() != '':
+                    file_name = self.check_and_convert_file_name()
+                    write_tag(self.tag_input.text(), self.write_value.text(
+                    ), self, plc, file_enabled=True, file_name=file_name, file_selection=self.file_format)
                 else:
-                    data = self.get_value_tree_data(
-                        self.value_tree.invisibleRootItem())
-
-                    tags = []
-                    formatted_tags = []
-                    values = []
-
-                    for key, value in data.items():
-
-                        tags.append(key)
-
-                        # remove the [] from the tag name
-                        key = re.sub(r'\[\d+\]', '', key)
-
-                        formatted_tags.append(key)
-
-                        values.append(self.convert_write_values(value, key))
-
-                    if len(tags) == 1:
-                        tags = tags[0]
-                        values = values[0]
-                        formatted_tags = formatted_tags[0]
-
-                    write_tag(tags, values, self, plc)
+                    write_tag(self.tag_input.text(), self.write_value.text(
+                    ), self, plc, file_enabled=True, file_selection=self.file_format)
             else:
                 self.print_results("Tag or tags do not exist in PLC.", 'red')
         else:
             self.print_results("Tag input is invalid.", 'red')
+        
+    @check_tag_decorator
+    def write_from_tree(self):
+        data = self.get_value_tree_data(
+            self.value_tree.invisibleRootItem())
+
+        tags = []
+        formatted_tags = []
+        values = []
+
+        for key, value in data.items():
+
+            tags.append(key)
+
+            # remove the [] from the tag name
+            key = re.sub(r'\[\d+\]', '', key)
+
+            formatted_tags.append(key)
+
+            values.append(self.convert_write_values(value, key))
+
+        if len(tags) == 1:
+            tags = tags[0]
+            values = values[0]
+            formatted_tags = formatted_tags[0]
+
+        write_tag(tags, values, self, plc)
 
     def verify_write_values(self):
         if not self.write_value.text() == '':
