@@ -1,9 +1,9 @@
 import sys
 import input_checks
 import time
+from functools import wraps
 from pycomm3 import LogixDriver
 import file_helper
-from functools import wraps
 # from offline_read import LogixDriver
 from PySide6.QtCharts import QChart, QChartView, QLineSeries
 import qdarktheme
@@ -44,10 +44,8 @@ import re
 import datetime
 import matplotlib.pyplot as plt
 import csv
+from globals import *
 
-tag_types = None
-tag_dimensions = None
-plc = None
 
 def check_plc_connection_decorator(func):
     """
@@ -61,11 +59,10 @@ def check_plc_connection_decorator(func):
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        main_window = get_main_window()
-        if check_plc_connection(plc, main_window):
+        if check_plc_connection(plc, window):
             return func(*args, **kwargs)
         else:
-            main_window.print_results(
+            window.print_results(
                 f"Error: No connection to PLC.<br>", 'red')
     return wrapper
 
@@ -83,15 +80,28 @@ def check_tag_decorator(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
 
-        main_window = get_main_window()
+        tags = window.tag_input.text()
 
-        tag = main_window.tag_input.text()
+        ok_to_proceed = True
 
-        if input_checks.check_tag_range(tag, tag_types):
+        # split tag name(s) into a list
+        tags = [name.strip() for name in tags.split(',')]
+
+        for tag in tags:
+            formatted_tag = re.sub(r"(\[\d+\])|(\{\d+\})", "", tag)
+
+            if formatted_tag in tag_types:
+                if not input_checks.check_tag_range(tag, tag_types):
+                    ok_to_proceed = False
+                    window.print_results(
+                        f"Error: Tag {tag} range is incorrect.<br>", 'red')
+            else:
+                ok_to_proceed = False
+                window.print_results(
+                    f"Error: Tag {tag} not in tag list.<br>", 'red')
+                
+        if ok_to_proceed:
             return func(*args, **kwargs)
-        else:
-            main_window.print_results(
-                f"Error: Tag range incorrect.<br>", 'red')
     return wrapper
 
 
@@ -1634,38 +1644,48 @@ class MainWindow(QMainWindow):
         self.read_thread = QThread()
     
     @check_plc_connection_decorator
-    def get_structure_for_value_tree(self, tag):
+    def get_structure_for_value_tree(self, tags):
         self.value_tree.clear()
 
-        # check if the tag is an array
-        if '{' in tag or '}' in tag:
-            # get the number of elements in the array
-            num = re.search(r'\{(\d+)\}', self.tag_input.text()).group(1)
+        # split tags by comma
+        tags = [t.strip() for t in tags.split(',')]
 
-            print(f'num: {num}')
+        for tag in tags:
+            # remove both brackets from the tag
+            formatted_tag = re.sub(r"(\[\d+\])|(\{\d+\})", "", tag)
+            if tag in tag_types:
+                # check if the tag is an array
+                if '{' in tag or '}' in tag:
+                    # get the number of elements in the array
+                    num = re.search(r'\{(\d+)\}', self.tag_input.text()).group(1)
 
-            # get the tag name without the array
-            tag = re.sub(r'\{\d+\}', '', self.tag_input.text())
+                    print(f'num: {num}')
 
-            print(f'tag: {tag}')
+                    # get the tag name without the array
+                    tag = re.sub(r'\{\d+\}', '', self.tag_input.text())
 
-            if '[' in tag or ']' in tag:
-                print('tag has []')
-                # get the start index of the array
-                start_index = int(re.search(r'\[(\d+)\]', tag).group(1))
-                print(f'start_index: {start_index}')
-                # get the tag name without the array
-                tag = re.sub(r'\[\d+\]', '', tag)
-                print(f'tag: {tag}')
+                    print(f'tag: {tag}')
+
+                    if '[' in tag or ']' in tag:
+                        print('tag has []')
+                        # get the start index of the array
+                        start_index = int(re.search(r'\[(\d+)\]', tag).group(1))
+                        print(f'start_index: {start_index}')
+                        # get the tag name without the array
+                        tag = re.sub(r'\[\d+\]', '', tag)
+                        print(f'tag: {tag}')
+                    else:
+                        start_index = 0
+
+                    for i in range(int(num)):
+                        self.add_data_to_write_tree(
+                            self.value_tree, f'{tag}[{start_index + i}]', plc.read(f'{tag}[{start_index + i}]').value)
+                else:
+                    self.add_data_to_write_tree(
+                        self.value_tree, tag, plc.read(tag).value)
             else:
-                start_index = 0
-
-            for i in range(int(num)):
-                self.add_data_to_write_tree(
-                    self.value_tree, f'{tag}[{start_index + i}]', plc.read(f'{tag}[{start_index + i}]').value)
-        else:
-            self.add_data_to_write_tree(
-                self.value_tree, tag, plc.read(tag).value)
+                self.print_results(f'{tag} is not a valid tag<br>', 'red')
+        
 
 
     def start_read_thread(self):
@@ -2305,10 +2325,6 @@ class MainWindow(QMainWindow):
         self.connect_button.setText("Connect")
         self.menu_status.setText("Disconnected")
         self.disable_buttons()
-
-
-def get_main_window():
-    return window
 
 
 app = QApplication(sys.argv)
