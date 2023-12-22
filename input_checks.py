@@ -46,14 +46,8 @@ def check_tag_range(tag, tag_types):
         # strip out the brackets
         formatted_tag = re.sub(r"(\[\d+\])|(\{\d+\})", "", tag)
 
-        print('test')
-
-        print(formatted_tag in tag_types)
-
         if formatted_tag in tag_types:
             dimensions = tag_types[formatted_tag]['dimensions']
-
-            print(dimensions)
 
             # if tag is a list
             if dimensions[0] > 0:

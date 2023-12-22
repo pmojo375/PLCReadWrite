@@ -393,6 +393,8 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                 match = re.search(r'\[(\d+)\]', entry_tag)
                 if match:
                     start_index = int(match.group(1))
+                else:
+                    start_index = 0
 
                 # check if tag has {}
                 if re.search(r'\{[^}]*\}', entry_tag):
@@ -420,6 +422,8 @@ def read_tag(tag_names, plc, result_window, **kwargs):
                     match = re.search(r'\[(\d+)\]', entry_tag)
                     if match:
                         start_index = int(match.group(1))
+                    else:
+                        start_index = 0
 
                     if re.search(r'\{[^}]*\}', entry_tag):
                         tag_name_formatted = re.sub(pattern, '', entry_tag)
@@ -513,10 +517,6 @@ def get_tags_from_plc(plc):
                 if tag_data_type['name'] != 'STRING':
                     tag_list = extract_child_data_types(
                         tag_data_type['internal_tags'], tag_list, tag_name)
-                
-
-
-        print('PartDataCarrier' in tag_list)
         return tag_list
     except Exception as e:
         print(f"Error in get_tags_from_plc function: {e}")
@@ -576,14 +576,11 @@ def set_data_type(value, tag):
         ValueError: If the value cannot be converted to the specified data type.
     """
     try:
-        print(tag)
         # Check if the tag is in the tag_list
         if tag in tag_types:
             # Get the data type from the tag_list
             type = tag_types[tag]['data_type']
             dimensions = tag_types[tag]['dimensions']
-
-            print(type)
 
             # Set the data type based on the type from the tag_list
             if type == 'STRING':
@@ -1899,7 +1896,7 @@ class MainWindow(QMainWindow):
             item = QTreeWidgetItem(parent, [tag, ''])
             item.setFlags(item.flags() | Qt.ItemIsEditable)
             for i, value in enumerate(value):
-                self.add_data_to_write_tree(item, f'{i}', value)
+                self.add_data_to_write_tree(item, f'{i} ', value)
         else:
             item = QTreeWidgetItem(parent, [tag, str(value)])
             item.setFlags(item.flags() | Qt.ItemIsEditable)
@@ -1926,8 +1923,11 @@ class MainWindow(QMainWindow):
 
             values.append(self.convert_write_values(value, key))
 
-        print(tags)
-        print(values)
+
+        if len(tags) == 1:
+            tags = tags[0]
+            values = values[0]
+            formatted_tags = formatted_tags[0]
 
         write_tag(tags, values, self, plc)
 
@@ -1937,19 +1937,25 @@ class MainWindow(QMainWindow):
         
         data = {}
 
+        parent_name = parent.text(0)
+
+        _list = []
+
         for i in range(parent.childCount()):
             child = parent.child(i)
             child_data = self.get_value_tree_data(child)
 
             tag = child.text(0)
 
-            if tag:
-                data[tag] = child_data
+            # tag is part of a list broken out to a dictionary. Need to reconvert to list.
+            if ' ' in tag:
+                _list.append(child_data)
             else:
-                if isinstance(child_data, list):
-                    data.setdefault('list', []).extend(child_data)
-                else:
-                    data.setdefault('list', []).append(child_data)
+                if tag:
+                    data[tag] = child_data
+
+        if _list != []:
+            data = _list 
 
         return data
 
