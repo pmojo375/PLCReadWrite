@@ -1,5 +1,8 @@
-class Tag():
-    def __init__(self, name, value, type, error):
+import json
+import pickle
+
+class Tag:
+    def __init__(self, name, type, value, error=None):
         self.tag = name
         self.type = type
         self.value = value
@@ -13,26 +16,50 @@ class LogixDriver():
 
     def __init__(self, ip):
         self.connected = False
-        self.tags_json = {"test_tag": {"tag_name": "test_tag", "dim": 0, "alias": False, "instance_id": 2019, "symbol_address": 1880754376, "symbol_object_address": 1915097356, "software_control": 1140918469, "external_access": "Read/Write", "dimensions": [0, 0, 0], "data_type": "DINT", "data_type_name": "DINT", "tag_type": "atomic"}, "test_tag2": {"tag_name": "test_tag2", "dim": 0, "alias": False, "instance_id": 2019, "symbol_address": 1880754376, "symbol_object_address": 1915097356, "software_control": 1140918469, "external_access": "Read/Write", "dimensions": [0, 0, 0], "data_type": "DINT", "data_type_name": "DINT", "tag_type": "atomic"}, 'test_nestedUDT': {'tag_name': 'test_nestedUDT', 'dim': 0, 'alias': False, 'instance_id': 2701, 'symbol_address': 1880764944, 'symbol_object_address': 1916051512, 'software_control': 67176874, 'external_access': 'Read/Write', 'dimensions': [0, 0, 0], 'template_instance_id': 2137, 'data_type': {'name': 'TestNestedUDT', 'internal_tags': {'ZZZZZZZZZZTestNested0': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'SINT', 'data_type_name': 'SINT', 'array': 0}, 'Bool': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 0}, 'Dint': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'Timer': {'offset': 8, 'tag_type': 'struct', 'data_type': {'name': 'TIMER', 'internal_tags': {'Control': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'PRE': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'ACC': {'offset': 8, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'EN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 7}, 'TT': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 6}, 'DN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 5}}, 'attributes': ['PRE', 'ACC', 'EN', 'TT', 'DN'], 'template': {'object_definition_size': 32, 'structure_size': 12, 'member_count': 6, 'structure_handle': 3971}}, 'data_type_name': 'TIMER', 'array': 0}, 'DintArray': {'offset': 20, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 2}}, 'attributes': ['Bool', 'Dint', 'Timer', 'DintArray'], 'template': {'object_definition_size': 36, 'structure_size': 28, 'member_count': 5, 'structure_handle': 55168}}, 'data_type_name': 'TestNestedUDT', 'tag_type': 'struct'}, 'test_UDT': {'tag_name': 'test_UDT', 'dim': 1, 'alias': False, 'instance_id': 2702, 'symbol_address': 1880764972, 'symbol_object_address': 1916051612, 'software_control': 67176875, 'external_access': 'Read/Write', 'dimensions': [3, 0, 0], 'template_instance_id': 846, 'data_type': {'name': 'TestUDT', 'internal_tags': {'ZZZZZZZZZZTestUDT0': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'SINT', 'data_type_name': 'SINT', 'array': 0}, 'Bool': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 0}, 'Dint': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'Timer': {'offset': 8, 'tag_type': 'struct', 'data_type': {'name': 'TIMER', 'internal_tags': {'Control': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'PRE': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'ACC': {'offset': 8, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'EN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 7}, 'TT': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 6}, 'DN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 5}}, 'attributes': ['PRE', 'ACC', 'EN', 'TT', 'DN'], 'template': {'object_definition_size': 32, 'structure_size': 12, 'member_count': 6, 'structure_handle': 3971}}, 'data_type_name': 'TIMER', 'array': 0}, 'Counter': {'offset': 20, 'tag_type': 'struct', 'data_type': {'name': 'COUNTER', 'internal_tags': {'Control': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'PRE': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'ACC': {'offset': 8, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'CU': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 7}, 'CD': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 6}, 'DN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 5}, 'OV': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 4}, 'UN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 3}}, 'attributes': ['PRE', 'ACC', 'CU', 'CD', 'DN', 'OV', 'UN'], 'template': {'object_definition_size': 40, 'structure_size': 12, 'member_count': 8, 'structure_handle': 3970}}, 'data_type_name': 'COUNTER', 'array': 0}, 'DintArray': {'offset': 32, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 2}, 'NestedUDT': {'offset': 40, 'tag_type': 'struct', 'data_type': {'name': 'TestNestedUDT', 'internal_tags': {
-            'ZZZZZZZZZZTestNested0': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'SINT', 'data_type_name': 'SINT', 'array': 0}, 'Bool': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 0}, 'Dint': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'Timer': {'offset': 8, 'tag_type': 'struct', 'data_type': {'name': 'TIMER', 'internal_tags': {'Control': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'PRE': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'ACC': {'offset': 8, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'EN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 7}, 'TT': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 6}, 'DN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 5}}, 'attributes': ['PRE', 'ACC', 'EN', 'TT', 'DN'], 'template': {'object_definition_size': 32, 'structure_size': 12, 'member_count': 6, 'structure_handle': 3971}}, 'data_type_name': 'TIMER', 'array': 0}, 'DintArray': {'offset': 20, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 2}}, 'attributes': ['Bool', 'Dint', 'Timer', 'DintArray'], 'template': {'object_definition_size': 36, 'structure_size': 28, 'member_count': 5, 'structure_handle': 55168}}, 'data_type_name': 'TestNestedUDT', 'array': 0}, 'NestedUDTArray': {'offset': 68, 'tag_type': 'struct', 'data_type': {'name': 'TestNestedUDT', 'internal_tags': {'ZZZZZZZZZZTestNested0': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'SINT', 'data_type_name': 'SINT', 'array': 0}, 'Bool': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 0}, 'Dint': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'Timer': {'offset': 8, 'tag_type': 'struct', 'data_type': {'name': 'TIMER', 'internal_tags': {'Control': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'PRE': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'ACC': {'offset': 8, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'EN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 7}, 'TT': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 6}, 'DN': {'offset': 3, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 5}}, 'attributes': ['PRE', 'ACC', 'EN', 'TT', 'DN'], 'template': {'object_definition_size': 32, 'structure_size': 12, 'member_count': 6, 'structure_handle': 3971}}, 'data_type_name': 'TIMER', 'array': 0}, 'DintArray': {'offset': 20, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 2}}, 'attributes': ['Bool', 'Dint', 'Timer', 'DintArray'], 'template': {'object_definition_size': 36, 'structure_size': 28, 'member_count': 5, 'structure_handle': 55168}}, 'data_type_name': 'TestNestedUDT', 'array': 2}}, 'attributes': ['Bool', 'Dint', 'Timer', 'Counter', 'DintArray', 'NestedUDT', 'NestedUDTArray'], 'template': {'object_definition_size': 51, 'structure_size': 124, 'member_count': 8, 'structure_handle': 37592}}, 'data_type_name': 'TestUDT', 'tag_type': 'struct'}, 'test': {'tag_name': 'test', 'dim': 0, 'alias': False, 'instance_id': 2704, 'symbol_address': 1880765344, 'symbol_object_address': 1916051708, 'software_control': 67176876, 'external_access': 'Read/Write', 'dimensions': [0, 0, 0], 'template_instance_id': 940, 'data_type': {'name': 'Test', 'internal_tags': {'First': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'Second': {'offset': 4, 'tag_type': 'struct', 'data_type': {'name': 'STRING', 'internal_tags': {'LEN': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 0}, 'DATA': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'SINT', 'data_type_name': 'SINT', 'array': 82}}, 'attributes': ['LEN', 'DATA'], 'template': {'object_definition_size': 16, 'structure_size': 88, 'member_count': 2, 'structure_handle': 4046}, 'string': 82}, 'data_type_name': 'STRING', 'array': 0}}, 'attributes': ['First', 'Second'], 'template': {'object_definition_size': 16, 'structure_size': 92, 'member_count': 2, 'structure_handle': 33896}}, 'data_type_name': 'Test', 'tag_type': 'struct'}, 'test123': {'tag_name': 'test123', 'dim': 0, 'alias': False, 'instance_id': 2705, 'symbol_address': 1880765440, 'symbol_object_address': 1916051800, 'software_control': 67176878, 'external_access': 'Read/Write', 'dimensions': [0, 0, 0], 'template_instance_id': 2203, 'data_type': {'name': 'Test123', 'internal_tags': {'ZZZZZZZZZZTest1230': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'SINT', 'data_type_name': 'SINT', 'array': 0}, 'TestBool': {'offset': 0, 'tag_type': 'atomic', 'data_type': 'BOOL', 'data_type_name': 'BOOL', 'bit': 0}, 'TestList': {'offset': 4, 'tag_type': 'atomic', 'data_type': 'DINT', 'data_type_name': 'DINT', 'array': 5}}, 'attributes': ['TestBool', 'TestList'], 'template': {'object_definition_size': 26, 'structure_size': 24, 'member_count': 3, 'structure_handle': 47133}}, 'data_type_name': 'Test123', 'tag_type': 'struct'}}
+
+        with open('tag_list.json') as f:
+            self.tags_json = json.loads(f.read())
+
+        with open('tag_objects.pkl', 'rb') as f:
+            self.tag_objects = pickle.load(f)
+
+        print(self.tag_objects['PartDataCarrier'].value)
+
 
     def read(self, *tags):
-        
+
         tag_results = []
         
         for tag in tags:
-            if tag == 'test_tag':
-                tag_results.append(Tag('test_tag', 9999, 'DINT', None))
-            elif tag == 'test_nestedUDT':
-                tag_results.append(Tag('test_nestedUDT', {'Bool': False, 'Dint': 0, 'Timer': {'PRE': 0, 'ACC': 0, 'EN': False, 'TT': False, 'DN': False}, 'DintArray': [1, 2]}, 'TestNestedUDT', None))
-            elif tag == 'test_UDT':
-                tag_results.append(Tag('test_UDT', {'Dint': 0, 'Timer': {'PRE': 0, 'ACC': 0, 'EN': False, 'TT': False, 'DN': False}, 'Counter': {'PRE': 0, 'ACC': 0, 'CU': False, 'CD': False, 'DN': False, 'OV': False, 'UN': False}, 'DintArray': [0, 0], 'NestedUDT': {'Dint': 0, 'Timer': {'PRE': 0, 'ACC': 0, 'EN': False, 'TT': False, 'DN': False}, 'DintArray': [0, 0], 'Bool': False}, 'NestedUDTArray': [{'Dint': 0, 'Timer': {'PRE': 0, 'ACC': 0, 'EN': False, 'TT': False, 'DN': False}, 'DintArray': [0, 0], 'Bool': False}, {'Dint': 0, 'Timer': {'PRE': 0, 'ACC': 0, 'EN': False, 'TT': False, 'DN': False}, 'DintArray': [0, 0], 'Bool': False}], 'Bool': False}, 'TestUDT', None))
-            elif tag == 'test':
-                tag_results.append(Tag('test', {'First': 0, 'Second': ''}, 'Test', None))
-            elif tag == 'test123':
-                tag_results.append(Tag('test123', {'TestBool': False, 'TestList': [0, 0, 0, 0, 0]}, 'Test123', None))
+            # remove [x] and {x} from tag name where x is a number
+            if '[' in tag or '{' in tag:
+                stripped_tag = tag.split('[')[0].split('{')[0]
             else:
-                tag_results.append(Tag(tag, None, None, 'Tag does not exist'))
+                stripped_tag = tag
+
+            if '{' in tag:
+                # get the number between the { and }
+                num_to_read = tag.split('{')[1].split('}')[0]
+            else:
+                num_to_read = 1
+            if '[' in tag:
+                # get the number between the [ and ]
+                start_index = tag.split('[')[1].split(']')[0]
+            else:
+                start_index = 0
+            
+            if num_to_read == 1:
+                tag_results.append(self.tag_objects[stripped_tag])
+            else:
+                values = []
+
+                tag_data = self.tag_objects[stripped_tag]
+
+                for i in range(int(num_to_read)):
+                    values.append(tag_data.value)
+                
+                tag_data.value = values
+                tag_results.append(tag_data)
                 
         if len(tag_results) == 1:
             return tag_results[0]
