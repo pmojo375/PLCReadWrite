@@ -123,11 +123,8 @@ def connect_to_plc(ip, connect_button, main_window):
     if plc is not None:
         # Close the existing connection
         plc.close()
-        connect_button.setText("Connect")
-        main_window.menu_status.setText("Disconnected")
         plc = None
         main_window.stop_plc_connection_check()
-        main_window.disable_buttons()
     else:
         # Open a new connection
         plc = LogixDriver(ip)
@@ -177,6 +174,7 @@ def check_plc_connection(plc, main_window):
                 return False
         else:
             main_window.stop_plc_connection_check()
+            
             return False
     return False
 
@@ -672,6 +670,7 @@ class Trender(QObject):
     update = Signal(str, str)
     update_trend_data = Signal(list, list)
     finished = Signal()
+    add_to_tree = Signal(dict, QTreeWidgetItem)
 
     def __init__(self):
         super(Trender, self).__init__()
@@ -735,7 +734,7 @@ class Trender(QObject):
                     for tag, value in self.tag_data.items():
                         self.update.emit(f'{tag} = {value}', 'yellow')
                     self.results[0].append(result[0].value)
-                    self.main_window.add_to_tree(
+                    self.add_to_tree.emit(
                         {self.formatted_tags[0]: result[0].value}, self.main_window.tree.invisibleRootItem())
                     self.update.emit('', 'white')
                 else:
@@ -744,7 +743,7 @@ class Trender(QObject):
                             r.value, self.formatted_tags[i], {}))
                         self.results[i].append(r.value)
 
-                    self.main_window.add_to_tree(
+                    self.add_to_tree.emit(
                         {self.formatted_tags[i]: r.value}, self.main_window.tree.invisibleRootItem())
 
                     for result in self.tag_data:
@@ -798,6 +797,7 @@ class Monitorer(QObject):
     """
 
     update = Signal(str, str)
+    add_to_tree = Signal(dict, QTreeWidgetItem)
     update_trend_data = Signal(list, list)
     finished = Signal()
 
@@ -865,7 +865,7 @@ class Monitorer(QObject):
                                 self.update.emit(
                                     f'{self.read_write_tag_list[i]} = {tag_result.value}', 'yellow')
 
-                                self.main_window.add_to_tree(
+                                self.add_to_tree.emit(
                                     {self.read_write_tag_list[i]: tag_result.value}, self.main_window.tree.invisibleRootItem())
 
                             self.update.emit('', 'white')
@@ -875,7 +875,7 @@ class Monitorer(QObject):
                             self.update.emit(
                                 f'{self.read_write_tag_list[0]} = {read_event_results.value}', 'yellow')
 
-                            self.main_window.add_to_tree(
+                            self.add_to_tree.emit(
                                 {self.read_write_tag_list[0]: read_event_results.value}, self.main_window.tree.invisibleRootItem())
 
                         self.update.emit('', 'white')
@@ -890,7 +890,7 @@ class Monitorer(QObject):
                 try:
                     result = self.plc.read(self.tag)
 
-                    self.main_window.add_to_tree(
+                    self.add_to_tree.emit(
                         {self.tag: result.value}, self.main_window.tree.invisibleRootItem())
 
                     if result.value == self.value and self.hold == False:
@@ -930,7 +930,7 @@ class Monitorer(QObject):
                                     self.update.emit(
                                         f'{self.read_write_tag_list[i]} = {tag_result.value}', 'yellow')
 
-                                    self.main_window.add_to_tree(
+                                    self.add_to_tree.emit(
                                         {self.read_write_tag_list[i]: tag_result.value}, self.main_window.tree.invisibleRootItem())
 
                                 self.update.emit('', 'white')
@@ -941,7 +941,7 @@ class Monitorer(QObject):
                                     f'{self.read_write_tag_list[0]} = {read_event_results.value}', 'yellow')
                                 self.update.emit('', 'white')
 
-                                self.main_window.add_to_tree(
+                                self.add_to_tree.emit(
                                     {self.read_write_tag_list[0]: read_event_results.value}, self.main_window.tree.invisibleRootItem())
 
                             if not self.read_once:
@@ -1310,6 +1310,7 @@ class MainWindow(QMainWindow):
         self.trender.update_trend_data.connect(self.update_trend_data)
         self.trender_results = []
         self.trender_timestamps = []
+        self.trender.add_to_tree.connect(self.add_to_tree)
 
         # Monitorer thread and signals
         self.monitorer = Monitorer()
@@ -1318,6 +1319,7 @@ class MainWindow(QMainWindow):
         self.monitor_thread.started.connect(self.monitorer.run)
         self.monitorer.finished.connect(self.monitor_thread.quit)
         self.monitorer.update.connect(self.print_results)
+        self.monitorer.add_to_tree.connect(self.add_to_tree)
 
         container = QWidget(self)
         container.setMinimumWidth(400)
