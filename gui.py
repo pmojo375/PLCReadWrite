@@ -2300,6 +2300,7 @@ class MainWindow(QMainWindow):
                                 self.monitor_rate.value() * 1000)
                             self.monitorer.plc = plc
                             self.monitorer.main_window = self
+                            self.monitorer.hold = False
 
                             self.monitorer.read_once = self.event_oneshot.isChecked()
 
