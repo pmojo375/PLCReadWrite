@@ -513,10 +513,10 @@ def write_tag(tags, values, main_window, plc, **kwargs):
     elif file_selection == 1:
         file_name = kwargs.get('file_name', 'tag_values.csv')
 
-    if not isinstance(tags, list):
-        tags = [t.strip() for t in tags.split(',')]
-
     if not file_enabled:
+        if not isinstance(tags, list):
+            tags = [t.strip() for t in tags.split(',')]
+
         if type(values) == str:
             values = [t.strip() for t in values.split(',')]
         else:
@@ -549,7 +549,12 @@ def write_tag(tags, values, main_window, plc, **kwargs):
 
             # format tag values to their proper values
             for i in _tags:
-                tags.append((i[0], set_data_type(i[1], i[0])))
+                if '[' in i[0] and ']' in i[0]:
+                    # strip string[x] to string
+                    tag = re.sub(r'\[\d+\]', '', i[0])
+                    tags.append((i[0], set_data_type(i[1], tag)))
+                else:
+                    tags.append((i[0], set_data_type(i[1], i[0])))
 
         try:
             write_result = plc.write(*tags)
@@ -559,7 +564,7 @@ def write_tag(tags, values, main_window, plc, **kwargs):
             else:
                 main_window.print_results(f'{write_result.error}<br>', 'red')
         except Exception as e:
-            print(f"Error in write_tag: {e}")
+            main_window.print_results(f"Error in write_tag: {e}")
             return None
 
 
@@ -2143,19 +2148,13 @@ class MainWindow(QMainWindow):
             self.write_from_tree()
 
     def write_from_file(self):
-        if self.tag_input.hasAcceptableInput():
-            if self.is_valid_tag_input(self.tag_input.text(), tag_types):
-                if self.file_name.text() != '':
-                    file_name = self.check_and_convert_file_name()
-                    write_tag(self.tag_input.text(), self.write_value.text(
-                    ), self, plc, file_enabled=True, file_name=file_name, file_selection=self.file_format)
-                else:
-                    write_tag(self.tag_input.text(), self.write_value.text(
-                    ), self, plc, file_enabled=True, file_selection=self.file_format)
-            else:
-                self.print_results("Tag or tags do not exist in PLC.", 'red')
+        if self.file_name.text() != '':
+            file_name = self.check_and_convert_file_name()
+            write_tag(self.tag_input.text(), self.write_value.text(
+            ), self, plc, file_enabled=True, file_name=file_name, file_selection=self.file_format)
         else:
-            self.print_results("Tag input is invalid.", 'red')
+            write_tag(self.tag_input.text(), self.write_value.text(
+            ), self, plc, file_enabled=True, file_selection=self.file_format)
         
     @check_tag_decorator
     def write_from_tree(self):
