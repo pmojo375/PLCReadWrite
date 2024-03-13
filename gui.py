@@ -35,6 +35,8 @@ from PySide6.QtWidgets import (
     QSplashScreen,
     QGroupBox,
     QGraphicsTextItem,
+    QInputDialog,
+    QDialog,
 
 )
 from PySide6 import QtGui
@@ -650,6 +652,74 @@ def process_trend_data(tag, results, timestamps, single_tag, file_enabled, file_
 
                         writer.writerow(data)
 
+class Actioner(QObject):
+    """
+    A class for executing actions on a PLC.
+
+    Attributes:
+    - update (Signal): a signal for updating the GUI with messages
+    - finished (Signal): a signal for indicating that the actioner has finished
+    - action_list (list): a list of actions to execute
+    - plc (LogixDriver): a driver for communicating with the PLC
+
+    Methods:
+    - run(): a method to execute the actions
+    - stop(): a method to stop the actioner
+    """
+
+    update = Signal(str, str)
+    finished = Signal()
+
+    def __init__(self):
+        """
+        Initializes a new Actioner object.
+        """
+        super(Actioner, self).__init__()
+        self.action_list = None
+        self.plc = None
+        self.running = False
+        self.main_window = None
+
+    def run(self):
+        """
+        Executes the actions in the action list.
+        """
+        label_indexes = {}
+
+        for i, action in enumerate(self.action_list):
+            action_type = action[0]
+            if action_type == 'READ':
+                read_tag(action[1], self.plc, self.main_window)
+            elif action_type == 'WRITE':
+                write_tag(action[1][0], set_data_type(action[1][1],action[1][0]), self.main_window, self.plc)
+            elif action_type == 'LABEL':
+                label_indexes[action[1]] = i
+            elif action_type == 'WAIT TIME':
+                self.update.emit(f"Waiting {action[1]} seconds...<br>", 'white')
+                QThread.sleep(int(action[1]))
+            elif action_type == 'WAIT TAG':
+                tag = action[1][0]
+                value = action[1][1]
+                result = None
+                self.update.emit(f"Waiting For {tag} to equal {value}...", 'white')
+                self.count = 0
+                while str(result) != str(value):
+                    if self.count == 10:
+                        self.count = 0
+                        self.update.emit(f".", 'white')
+                    result = self.plc.read(tag).value
+                    QThread.msleep(100)
+                    self.count += 1
+                self.update.emit(f"Resuming...<br>", 'white')
+
+        self.finished.emit()
+
+    def stop(self):
+        """
+        Stops the actioner.
+        """
+        self.running = False
+        self.finished.emit()
 
 class Trender(QObject):
     """
@@ -1317,6 +1387,14 @@ class MainWindow(QMainWindow):
         self.trender_timestamps = []
         self.trender.add_to_tree.connect(self.add_to_tree)
 
+        # Actioner thread and signals
+        self.actioner = Actioner()
+        self.action_thread = QThread()
+        self.actioner.moveToThread(self.action_thread)
+        self.action_thread.started.connect(self.actioner.run)
+        self.actioner.finished.connect(self.action_thread.quit)
+        self.actioner.update.connect(self.print_results)
+
         # Monitorer thread and signals
         self.monitorer = Monitorer()
         self.monitor_thread = QThread()
@@ -1455,6 +1533,14 @@ class MainWindow(QMainWindow):
         self.event_radio_group.addButton(self.event_oneshot)
         self.event_radio_group.addButton(self.event_timed)
 
+        self.action_dropdown = QComboBox()
+        self.action_dropdown.addItems(["Read Tag", "Write Tag", "Wait (Seconds)", "Label", "Jump", "Wait (Tag Value)"])
+        self.add_action_button = QPushButton("Add Action")
+        self.remove_action_button = QPushButton("Remove Action")
+        self.action_list = QListView()
+        self.model = QtGui.QStandardItemModel()
+        self.action_list.setModel(self.model)
+
         # Set parameters
         self.monitor_rate.setRange(0.1, 60)
         self.event_oneshot.setChecked(True)
@@ -1474,17 +1560,22 @@ class MainWindow(QMainWindow):
         # Add to layouts
         self.monitor_radio_layout.addWidget(self.read_selected_radio)
         self.monitor_radio_layout.addWidget(self.write_selected_radio)
-        monitor_tab_layout.addWidget(self.monitor_value)
+        #monitor_tab_layout.addWidget(self.monitor_value)
         monitor_tab_layout.addWidget(self.monitor_rate)
-        monitor_tab_layout.addWidget(self.enable_event)
-        monitor_tab_layout.addLayout(self.monitor_radio_layout)
+        #monitor_tab_layout.addWidget(self.enable_event)
+        #monitor_tab_layout.addLayout(self.monitor_radio_layout)
         monitor_tab_layout.addWidget(self.monitor_button)
-        self.monitor_event_layout.addWidget(self.event_oneshot)
-        self.monitor_event_layout.addWidget(self.event_timed)
-        monitor_tab_layout.addLayout(self.monitor_event_layout)
-        monitor_tab_layout.addWidget(self.event_time)
-        monitor_tab_layout.addWidget(self.monitor_read_write_tags)
-        monitor_tab_layout.addWidget(self.monitor_read_write_values)
+        #self.monitor_event_layout.addWidget(self.event_oneshot)
+        #self.monitor_event_layout.addWidget(self.event_timed)
+        #monitor_tab_layout.addLayout(self.monitor_event_layout)
+        #monitor_tab_layout.addWidget(self.event_time)
+        #monitor_tab_layout.addWidget(self.monitor_read_write_tags)
+        #monitor_tab_layout.addWidget(self.monitor_read_write_values)
+        monitor_tab_layout.addWidget(self.action_dropdown)
+        monitor_tab_layout.addWidget(self.add_action_button)
+        monitor_tab_layout.addWidget(self.remove_action_button)
+        monitor_tab_layout.addWidget(self.action_list)
+
 
         # Set tab layouts
         self.read_tab.setLayout(read_tab_layout)
@@ -1621,7 +1712,8 @@ class MainWindow(QMainWindow):
         self.trend_button.clicked.connect(self.trender_thread)
         self.trend_plot_button.clicked.connect(lambda: self.show_plot_setup_window(
             self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
-        self.monitor_button.clicked.connect(self.monitorer_thread)
+        #self.monitor_button.clicked.connect(self.monitorer_thread)
+        self.monitor_button.clicked.connect(self.monitorer_button_clicked)
         self.connect_button.clicked.connect(self.connect_button_clicked)
         self.file_browser.clicked.connect(
             lambda: self.file_name.setText(QFileDialog.getOpenFileName()[0]))
@@ -1643,12 +1735,117 @@ class MainWindow(QMainWindow):
         self.save_tree_button.clicked.connect(self.save_tree_to_file)
         self.clear_tree_button.clicked.connect(self.clear_tree)
 
+        self.add_action_button.clicked.connect(self.add_action_button_clicked)
+        self.remove_action_button.clicked.connect(self.remove_from_action_list)
+
         # Load stored data if available
         self.ip_input.setText(self.settings.value('ip', ''))
         self.tag_input.setText(self.settings.value('tag', ''))
         self.populate_list_from_history()
 
         self.read_thread = QThread()
+
+        self.labels = []
+        self.monitor_sequence = []
+
+    def monitorer_button_clicked(self):
+        if self.actioner.running:
+            self.actioner.stop()
+        else:
+            if not self.action_thread.isRunning():
+                self.actioner.action_list = self.monitor_sequence
+                self.actioner.plc = plc
+                self.actioner.main_window = self
+                self.actioner.running = True
+                self.action_thread.start()
+    
+
+    def error_dialog(self, message):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Error')
+        layout = QVBoxLayout()
+        label = QLabel(message)
+        layout.addWidget(label)
+        dialog.setLayout(layout)
+        dialog.setFixedWidth(200)
+        dialog.exec_()
+
+    def add_action_button_clicked(self):
+        # get the selected action
+        action = self.action_dropdown.currentText()
+
+        item = ''
+
+        if action == 'Read Tag':
+            tag, ok = QInputDialog.getText(self, 'Tag Dialog', 'Input Tag To Read')
+            if ok:
+                if self.is_valid_tag_input(tag, tag_types):
+                    item = f'READ - {tag}'
+                    self.monitor_sequence.append(('READ', tag))
+                else:
+                    self.error_dialog('Tag Does Not Exist')
+                    return
+            else:
+                return
+        if action == 'Write Tag':
+            tag, ok = QInputDialog.getText(self, 'Tag Dialog', 'Input Tag To Write')
+            if ok:
+                if self.is_valid_tag_input(tag, tag_types):
+                    value, ok = QInputDialog.getText(self, 'Value Dialog', 'Input Value To Write')
+                    if ok:
+                        item = f'WRITE - {value} to {tag}'
+                        self.monitor_sequence.append(('WRITE', (tag, value)))
+                    else:
+                        return
+                else:
+                    self.error_dialog('Tag Does Not Exist')
+                    return
+            else:
+                return
+        if action == 'Wait (Seconds)':
+            time, ok = QInputDialog.getDouble(self, 'Time Dialog', 'Input Seconds To Wait')
+            if ok:
+                item = f'WAIT - {time} Seconds'
+                self.monitor_sequence.append(('WAIT TIME', time))
+            else:
+                return
+        if action == 'Label':
+            label, ok = QInputDialog.getText(self, 'Label Dialog', 'Input Label')
+            if ok:
+                self.labels.append(label)
+                item = f'LABEL - {label}'
+                self.monitor_sequence.append(('LABEL', label))
+            else:
+                return
+        if action == 'Jump':
+            jump, ok = QInputDialog.getItem(self, 'Jump Dialog', 'Select Label To Jump To', self.labels)
+            if ok:
+                item = f'JUMP - {jump}'
+                self.monitor_sequence.append(('JUMP', jump))
+            else:
+                return
+        if action == 'Wait (Tag Value)':
+            tag, ok = QInputDialog.getText(self, 'Tag Dialog', 'Input Tag')
+            if ok:
+                value, ok = QInputDialog.getText(self, 'Value Dialog', 'Input Value To Pause For')
+                if ok:
+                    item = f'WAIT - {tag} = {value}'
+                    self.monitor_sequence.append(('WAIT TAG', (tag, value)))
+                else:
+                    return
+            else:
+                return
+
+        if item != '':
+            list_item = QStandardItem(item)
+            self.model.appendRow(list_item)
+
+
+    def remove_from_action_list(self):
+        self.model.removeRow(self.action_list.currentIndex().row())
+        self.monitor_sequence.pop(self.action_list.currentIndex().row())
+        print(self.monitor_sequence)
+
     
     @check_plc_connection_decorator
     def get_structure_for_value_tree(self, tags):
@@ -2196,16 +2393,20 @@ class MainWindow(QMainWindow):
         else:
             self.print_results("No value entered.<br>", 'red')
 
-    def print_results(self, results, color='white'):
+    def print_results(self, results, color='white', newline=True):
 
         cursor = self.results.textCursor()
         cursor.movePosition(QTextCursor.End)
 
-        cursor.insertHtml(
-            f"<span style='color: {color};'>{results}</span><br>")
-        # set scroll bar to bottom
-        self.results.verticalScrollBar().setValue(
-            self.results.verticalScrollBar().maximum())
+        if newline:
+            cursor.insertHtml(
+                f"<span style='color: {color};'>{results}</span><br>")
+            # set scroll bar to bottom
+            self.results.verticalScrollBar().setValue(
+                self.results.verticalScrollBar().maximum())
+        else:
+            cursor.insertHtml(
+                f"<span style='color: {color};'>{results}</span>")
 
     def update_trend_data(self, results, timestamps):
         self.trender_results = results
