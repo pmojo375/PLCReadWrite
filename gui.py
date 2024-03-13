@@ -2029,42 +2029,6 @@ class MainWindow(QMainWindow):
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
 
-    def read_event_selected(self):
-        self.event_oneshot.setEnabled(True)
-        self.event_timed.setEnabled(True)
-
-    def read_event_deselected(self):
-        self.event_oneshot.setEnabled(False)
-        self.event_timed.setEnabled(False)
-        self.event_radio_group.setExclusive(False)
-        self.event_oneshot.setChecked(True)
-        self.event_timed.setChecked(False)
-        self.event_radio_group.setExclusive(True)
-
-    def monitor_read_set_time_selected(self):
-        self.event_time.setEnabled(True)
-
-    def monitor_read_one_shot_selected(self):
-        self.event_time.setEnabled(False)
-
-    def set_read_write_selection(self):
-        if self.enable_event.isChecked():
-            self.read_selected_radio.setEnabled(True)
-            self.write_selected_radio.setEnabled(True)
-        else:
-            self.read_selected_radio.setEnabled(False)
-            self.write_selected_radio.setEnabled(False)
-            self.read_write_radio_group.setExclusive(False)
-            self.read_selected_radio.setChecked(False)
-            self.write_selected_radio.setChecked(False)
-            self.read_write_radio_group.setExclusive(True)
-            self.event_timed.setEnabled(False)
-            self.event_oneshot.setEnabled(False)
-            self.event_radio_group.setExclusive(False)
-            self.event_timed.setChecked(False)
-            self.event_oneshot.setChecked(True)
-            self.event_radio_group.setExclusive(True)
-
     def handle_list_selection_changed(self):
         self.remove_tag_button.setEnabled(
             bool(self.tags_to_read_list.selectedIndexes()))
