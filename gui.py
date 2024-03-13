@@ -713,6 +713,7 @@ class Actioner(QObject):
                 self.update.emit(f"Resuming...<br>", 'white')
 
         self.finished.emit()
+        self.running = False
 
     def stop(self):
         """
@@ -1388,12 +1389,12 @@ class MainWindow(QMainWindow):
         self.trender.add_to_tree.connect(self.add_to_tree)
 
         # Actioner thread and signals
-        self.actioner = Actioner()
-        self.action_thread = QThread()
-        self.actioner.moveToThread(self.action_thread)
-        self.action_thread.started.connect(self.actioner.run)
-        self.actioner.finished.connect(self.action_thread.quit)
-        self.actioner.update.connect(self.print_results)
+        self.sequencer = Actioner()
+        self.sequencer_thread = QThread()
+        self.sequencer.moveToThread(self.sequencer_thread)
+        self.sequencer_thread.started.connect(self.sequencer.run)
+        self.sequencer.finished.connect(self.sequencer_thread.quit)
+        self.sequencer.update.connect(self.print_results)
 
         # Monitorer thread and signals
         self.monitorer = Monitorer()
@@ -1418,7 +1419,7 @@ class MainWindow(QMainWindow):
         read_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
         write_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
         trend_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
-        monitor_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
+        sequencer_tab_layout = QVBoxLayout(alignment=Qt.AlignTop)
         self.monitor_radio_layout = QHBoxLayout()
         self.monitor_event_layout = QHBoxLayout()
         file_layout = QHBoxLayout()
@@ -1429,7 +1430,7 @@ class MainWindow(QMainWindow):
         self.read_tab = QWidget()
         write_tab = QWidget()
         trend_tab = QWidget()
-        monitor_tab = QWidget()
+        sequencer_tab = QWidget()
         tabs.setTabPosition(QTabWidget.North)
 
         # --------------------------------------------#
@@ -1504,84 +1505,38 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.read_tab, "Read")
         tabs.addTab(write_tab, "Write")
         tabs.addTab(trend_tab, "Trend")
-        tabs.addTab(monitor_tab, "Monitor")
+        tabs.addTab(sequencer_tab, "Sequencer")
 
         # --------------------------------------------#
-        #                 MONITOR TAB                 #
+        #                 SEQUENCER TAB                 #
         # --------------------------------------------#
 
         # Create widgets
-        self.monitor_button = QPushButton("Start Monitor")
-        self.monitor_value = QLineEdit()
-        self.monitor_rate = QDoubleSpinBox()
-        self.enable_event = QCheckBox("Enable Read/Write On Event")
-        self.read_selected_radio = QRadioButton("Read On Event")
-        self.write_selected_radio = QRadioButton("Write On Event")
-        self.monitor_read_write_tags = QLineEdit()
-        self.monitor_read_write_tags.setPlaceholderText(
-            "Tags to Read/Write On Event")
-        self.monitor_read_write_values = QLineEdit()
-        self.monitor_read_write_values.setPlaceholderText(
-            "Values to Write On Event")
-        self.event_oneshot = QRadioButton("Read Once")
-        self.event_timed = QRadioButton("Read For Set Time")
-        self.event_time = QDoubleSpinBox()
-        self.read_write_radio_group = QButtonGroup()
-        self.event_radio_group = QButtonGroup()
-        self.read_write_radio_group.addButton(self.read_selected_radio)
-        self.read_write_radio_group.addButton(self.write_selected_radio)
-        self.event_radio_group.addButton(self.event_oneshot)
-        self.event_radio_group.addButton(self.event_timed)
-
+        self.sequencer_button = QPushButton("Start Sequence")
         self.action_dropdown = QComboBox()
-        self.action_dropdown.addItems(["Read Tag", "Write Tag", "Wait (Seconds)", "Label", "Jump", "Wait (Tag Value)"])
         self.add_action_button = QPushButton("Add Action")
         self.remove_action_button = QPushButton("Remove Action")
         self.action_list = QListView()
         self.model = QtGui.QStandardItemModel()
-        self.action_list.setModel(self.model)
 
         # Set parameters
-        self.monitor_rate.setRange(0.1, 60)
-        self.event_oneshot.setChecked(True)
-        self.event_oneshot.setDisabled(True)
-        self.event_timed.setDisabled(True)
-        self.monitor_rate.setValue(1)
-        self.monitor_rate.setSuffix(" seconds between reads")
-        self.monitor_rate.setSingleStep(0.1)
-        self.event_time.setRange(0.1, 60)
-        self.event_time.setSuffix(" seconds to read tags")
-        self.monitor_value.setPlaceholderText("Value to Monitor")
-        self.monitor_button.setDisabled(True)
-        self.read_selected_radio.setEnabled(False)
-        self.write_selected_radio.setEnabled(False)
-        self.event_time.setEnabled(False)
+        self.sequencer_button.setDisabled(True)
+        self.action_dropdown.addItems(["Read Tag", "Write Tag", "Wait (Seconds)", "Label", "Jump", "Wait (Tag Value)"])
+        self.action_list.setModel(self.model)
 
         # Add to layouts
-        self.monitor_radio_layout.addWidget(self.read_selected_radio)
-        self.monitor_radio_layout.addWidget(self.write_selected_radio)
-        #monitor_tab_layout.addWidget(self.monitor_value)
-        monitor_tab_layout.addWidget(self.monitor_rate)
-        #monitor_tab_layout.addWidget(self.enable_event)
-        #monitor_tab_layout.addLayout(self.monitor_radio_layout)
-        monitor_tab_layout.addWidget(self.monitor_button)
-        #self.monitor_event_layout.addWidget(self.event_oneshot)
-        #self.monitor_event_layout.addWidget(self.event_timed)
-        #monitor_tab_layout.addLayout(self.monitor_event_layout)
-        #monitor_tab_layout.addWidget(self.event_time)
-        #monitor_tab_layout.addWidget(self.monitor_read_write_tags)
-        #monitor_tab_layout.addWidget(self.monitor_read_write_values)
-        monitor_tab_layout.addWidget(self.action_dropdown)
-        monitor_tab_layout.addWidget(self.add_action_button)
-        monitor_tab_layout.addWidget(self.remove_action_button)
-        monitor_tab_layout.addWidget(self.action_list)
+        sequencer_tab_layout.addWidget(self.action_dropdown)
+        sequencer_tab_layout.addWidget(self.add_action_button)
+        sequencer_tab_layout.addWidget(self.remove_action_button)
+        sequencer_tab_layout.addWidget(self.action_list)
+        sequencer_tab_layout.addWidget(self.sequencer_button)
 
 
         # Set tab layouts
         self.read_tab.setLayout(read_tab_layout)
         write_tab.setLayout(write_tab_layout)
         trend_tab.setLayout(trend_tab_layout)
-        monitor_tab.setLayout(monitor_tab_layout)
+        sequencer_tab.setLayout(sequencer_tab_layout)
 
         # Create main layout widgets
         self.ip_input = QLineEdit()
@@ -1598,6 +1553,7 @@ class MainWindow(QMainWindow):
         self.clear_results_button = QPushButton("Clear Results")
         self.save_tree_button = QPushButton("Save History To File")
         self.clear_tree_button = QPushButton("Clear History")
+
         # Set parameters
         self.tag_input.setPlaceholderText("Tag1, Tag2...")
         self.file_name.setPlaceholderText("File Name")
@@ -1657,7 +1613,7 @@ class MainWindow(QMainWindow):
             "Writes the value specified in the value input field to the tag specified in the tag input field.")
         self.trend_button.setToolTip(
             "Starts trending the tag specified in the tag input field.")
-        self.monitor_button.setToolTip(
+        self.sequencer_button.setToolTip(
             "Starts monitoring the tag specified in the tag input field.")
         self.ip_input.setToolTip("Enter the IP address of the PLC.")
         self.tag_input.setToolTip("Enter the tag to read or write to.")
@@ -1676,18 +1632,6 @@ class MainWindow(QMainWindow):
         self.trend_rate.setToolTip(
             "Enter the interval between reads in seconds.")
         self.trend_plot_button.setToolTip("Plots the trend data.")
-        self.monitor_value.setToolTip("Enter the value to monitor.")
-        self.monitor_rate.setToolTip(
-            "Enter the interval between reads in seconds.")
-        self.enable_event.setToolTip("Enable reading and writing on event.")
-        self.read_selected_radio.setToolTip(
-            "Reads the tags specified in the tags to read/write on event input field.")
-        self.write_selected_radio.setToolTip(
-            "Writes the values specified in the values to read/write on event input field to the tags specified in the tags to read/write on event input field.")
-        self.monitor_read_write_tags.setToolTip(
-            "Enter the tags to read/write on event.")
-        self.monitor_read_write_values.setToolTip(
-            "Enter the values to write on event.")
         self.write_value.setToolTip("Enter the value to write to the tag.")
 
         self.setStyleSheet("""QToolTip { 
@@ -1712,8 +1656,7 @@ class MainWindow(QMainWindow):
         self.trend_button.clicked.connect(self.trender_thread)
         self.trend_plot_button.clicked.connect(lambda: self.show_plot_setup_window(
             self.trender.formatted_tags, self.trender_results, self.trender_timestamps))
-        #self.monitor_button.clicked.connect(self.monitorer_thread)
-        self.monitor_button.clicked.connect(self.monitorer_button_clicked)
+        self.sequencer_button.clicked.connect(self.sequencer_button_clicked)
         self.connect_button.clicked.connect(self.connect_button_clicked)
         self.file_browser.clicked.connect(
             lambda: self.file_name.setText(QFileDialog.getOpenFileName()[0]))
@@ -1725,12 +1668,6 @@ class MainWindow(QMainWindow):
         self.add_tag_button.clicked.connect(self.add_to_list)
         self.read_List_button.clicked.connect(
             self.read_tag_list_button_clicked)
-        self.enable_event.stateChanged.connect(self.set_read_write_selection)
-
-        self.write_selected_radio.toggled.connect(self.read_event_deselected)
-        self.read_selected_radio.toggled.connect(self.read_event_selected)
-        self.event_timed.toggled.connect(self.monitor_read_set_time_selected)
-        self.event_oneshot.toggled.connect(self.monitor_read_one_shot_selected)
         self.clear_results_button.clicked.connect(self.clear_results)
         self.save_tree_button.clicked.connect(self.save_tree_to_file)
         self.clear_tree_button.clicked.connect(self.clear_tree)
@@ -1746,18 +1683,20 @@ class MainWindow(QMainWindow):
         self.read_thread = QThread()
 
         self.labels = []
-        self.monitor_sequence = []
+        self.sequence = []
 
-    def monitorer_button_clicked(self):
-        if self.actioner.running:
-            self.actioner.stop()
+    def sequencer_button_clicked(self):
+        if self.sequencer.running:
+            self.sequencer.stop()
+            self.sequencer_button.setEnabled(True)
         else:
-            if not self.action_thread.isRunning():
-                self.actioner.action_list = self.monitor_sequence
-                self.actioner.plc = plc
-                self.actioner.main_window = self
-                self.actioner.running = True
-                self.action_thread.start()
+            if not self.sequencer_thread.isRunning():
+                self.sequencer.action_list = self.sequence
+                self.sequencer.plc = plc
+                self.sequencer.main_window = self
+                self.sequencer.running = True
+                self.sequencer_thread.start()
+                self.sequencer_button.setEnabled(False)
     
 
     def error_dialog(self, message):
@@ -1781,7 +1720,7 @@ class MainWindow(QMainWindow):
             if ok:
                 if self.is_valid_tag_input(tag, tag_types):
                     item = f'READ - {tag}'
-                    self.monitor_sequence.append(('READ', tag))
+                    self.sequence.append(('READ', tag))
                 else:
                     self.error_dialog('Tag Does Not Exist')
                     return
@@ -1794,7 +1733,7 @@ class MainWindow(QMainWindow):
                     value, ok = QInputDialog.getText(self, 'Value Dialog', 'Input Value To Write')
                     if ok:
                         item = f'WRITE - {value} to {tag}'
-                        self.monitor_sequence.append(('WRITE', (tag, value)))
+                        self.sequence.append(('WRITE', (tag, value)))
                     else:
                         return
                 else:
@@ -1806,7 +1745,7 @@ class MainWindow(QMainWindow):
             time, ok = QInputDialog.getDouble(self, 'Time Dialog', 'Input Seconds To Wait')
             if ok:
                 item = f'WAIT - {time} Seconds'
-                self.monitor_sequence.append(('WAIT TIME', time))
+                self.sequence.append(('WAIT TIME', time))
             else:
                 return
         if action == 'Label':
@@ -1814,14 +1753,14 @@ class MainWindow(QMainWindow):
             if ok:
                 self.labels.append(label)
                 item = f'LABEL - {label}'
-                self.monitor_sequence.append(('LABEL', label))
+                self.sequence.append(('LABEL', label))
             else:
                 return
         if action == 'Jump':
             jump, ok = QInputDialog.getItem(self, 'Jump Dialog', 'Select Label To Jump To', self.labels)
             if ok:
                 item = f'JUMP - {jump}'
-                self.monitor_sequence.append(('JUMP', jump))
+                self.sequence.append(('JUMP', jump))
             else:
                 return
         if action == 'Wait (Tag Value)':
@@ -1830,7 +1769,7 @@ class MainWindow(QMainWindow):
                 value, ok = QInputDialog.getText(self, 'Value Dialog', 'Input Value To Pause For')
                 if ok:
                     item = f'WAIT - {tag} = {value}'
-                    self.monitor_sequence.append(('WAIT TAG', (tag, value)))
+                    self.sequence.append(('WAIT TAG', (tag, value)))
                 else:
                     return
             else:
@@ -1843,8 +1782,8 @@ class MainWindow(QMainWindow):
 
     def remove_from_action_list(self):
         self.model.removeRow(self.action_list.currentIndex().row())
-        self.monitor_sequence.pop(self.action_list.currentIndex().row())
-        print(self.monitor_sequence)
+        self.sequence.pop(self.action_list.currentIndex().row())
+        print(self.sequence)
 
     
     @check_plc_connection_decorator
@@ -2248,13 +2187,13 @@ class MainWindow(QMainWindow):
         self.trend_button.setDisabled(False)
         self.read_button.setDisabled(False)
         self.write_button.setDisabled(False)
-        self.monitor_button.setDisabled(False)
+        self.sequencer_button.setDisabled(False)
 
     def disable_buttons(self):
         self.trend_button.setDisabled(True)
         self.read_button.setDisabled(True)
         self.write_button.setDisabled(True)
-        self.monitor_button.setDisabled(True)
+        self.sequencer_button.setDisabled(True)
 
     def connect_button_clicked(self):
         if self.ip_input.hasAcceptableInput():
@@ -2481,7 +2420,7 @@ class MainWindow(QMainWindow):
         if self.monitorer.running:
             self.process_monitor_data(self.monitorer.yaml_data)
             self.monitorer.stop()
-            self.monitor_button.setText("Start Monitor")
+            self.sequencer_button.setText("Start Monitor")
         else:
             if check_plc_connection(plc, self):
                 if self.tag_input.hasAcceptableInput():
@@ -2511,7 +2450,7 @@ class MainWindow(QMainWindow):
 
                             self.monitorer.running = True
                             self.monitor_thread.start()
-                            self.monitor_button.setText("Stop Monitor")
+                            self.sequencer_button.setText("Stop Monitor")
                     else:
                         self.print_results(
                             "Tag or tags do not exist in PLC.", 'red')
