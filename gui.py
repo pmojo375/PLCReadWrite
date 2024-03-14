@@ -667,7 +667,7 @@ class Actioner(QObject):
     - stop(): a method to stop the actioner
     """
 
-    update = Signal(str, str)
+    update = Signal(str, str, bool)
     finished = Signal()
 
     def __init__(self):
@@ -679,38 +679,66 @@ class Actioner(QObject):
         self.plc = None
         self.running = False
         self.main_window = None
+        self.labels = {}
+
+    def set_labels(self):
+        for i, action in enumerate(self.action_list):
+            if action[0] == 'LABEL':
+                self.labels[action[1]] = i
+
+    def run_action_loop(self):
+
+        length = len(self.action_list)
+        i = 0
+
+        while i < length and self.running:
+            action_type = self.action_list[i][0]
+            if action_type == 'READ':
+                read_tag(self.action_list[i][1], self.plc, self.main_window)
+            elif action_type == 'WRITE':
+                write_tag(self.action_list[i][1][0], set_data_type(self.action_list[i][1][1],self.action_list[i][1][0]), self.main_window, self.plc)
+            elif action_type == 'JUMP':
+                label = self.action_list[i][1]
+                i = self.labels[label]
+                self.update.emit(f"Jumping to label {label}...<br>", 'white', True)
+            elif action_type == 'WAIT TIME':
+                self.update.emit(f"Waiting {self.action_list[i][1]} seconds...", 'white', False)
+                time_count = 0
+                time_print_count = 0
+                limit = int(self.action_list[i][1]) / 0.1
+                while time_count < limit and self.running:
+                    QThread.msleep(100)
+                    time_count += 1
+                    time_print_count += 1
+                    if time_print_count == 10:
+                        time_print_count = 0
+                        self.update.emit(f".", 'white', False)
+                if self.running:
+                    self.update.emit(f"<br>Resuming...<br>", 'white', True)
+            elif action_type == 'WAIT TAG':
+                tag = self.action_list[i][1][0]
+                value = self.action_list[i][1][1]
+                result = None
+                self.update.emit(f"Waiting For {tag} to equal {value}...", 'white', False)
+                self.count = 0
+                while str(result) != str(value) and self.running:
+                    if self.count == 10:
+                        self.count = 0
+                        self.update.emit(f".", 'white', False)
+                    result = self.plc.read(tag).value
+                    QThread.msleep(100)
+                    self.count += 1
+                if self.running:
+                    self.update.emit(f"<br>Resuming...<br>", 'white', True)
+            
+            i += 1
 
     def run(self):
         """
         Executes the actions in the action list.
         """
-        label_indexes = {}
-
-        for i, action in enumerate(self.action_list):
-            action_type = action[0]
-            if action_type == 'READ':
-                read_tag(action[1], self.plc, self.main_window)
-            elif action_type == 'WRITE':
-                write_tag(action[1][0], set_data_type(action[1][1],action[1][0]), self.main_window, self.plc)
-            elif action_type == 'LABEL':
-                label_indexes[action[1]] = i
-            elif action_type == 'WAIT TIME':
-                self.update.emit(f"Waiting {action[1]} seconds...<br>", 'white')
-                QThread.sleep(int(action[1]))
-            elif action_type == 'WAIT TAG':
-                tag = action[1][0]
-                value = action[1][1]
-                result = None
-                self.update.emit(f"Waiting For {tag} to equal {value}...", 'white')
-                self.count = 0
-                while str(result) != str(value):
-                    if self.count == 10:
-                        self.count = 0
-                        self.update.emit(f".", 'white')
-                    result = self.plc.read(tag).value
-                    QThread.msleep(100)
-                    self.count += 1
-                self.update.emit(f"Resuming...<br>", 'white')
+        self.set_labels()
+        self.run_action_loop()
 
         self.finished.emit()
         self.running = False
@@ -1688,7 +1716,7 @@ class MainWindow(QMainWindow):
     def sequencer_button_clicked(self):
         if self.sequencer.running:
             self.sequencer.stop()
-            self.sequencer_button.setEnabled(True)
+            self.sequencer_button.setText("Start Sequence")
         else:
             if not self.sequencer_thread.isRunning():
                 self.sequencer.action_list = self.sequence
@@ -1696,7 +1724,7 @@ class MainWindow(QMainWindow):
                 self.sequencer.main_window = self
                 self.sequencer.running = True
                 self.sequencer_thread.start()
-                self.sequencer_button.setEnabled(False)
+            self.sequencer_button.setText("Stop Sequence")
     
 
     def error_dialog(self, message):
