@@ -671,6 +671,7 @@ class Actioner(QObject):
     finished = Signal()
     read_tag = Signal(str, LogixDriver, QTextBrowser)
     write_tag = Signal(str, str, LogixDriver, QTextBrowser)
+    toggle_button = Signal()
 
     def __init__(self):
         """
@@ -682,28 +683,36 @@ class Actioner(QObject):
         self.running = False
         self.main_window = None
         self.labels = {}
+        self.loop_labels = {}
 
     def set_labels(self):
         for i, action in enumerate(self.action_list):
             if action[0] == 'LABEL':
                 self.labels[action[1]] = i
+            elif action[0] == 'LOOP LABEL':
+                self.loop_labels[action[1]] = i
+
+    # Need to fix loop so that the loop doesnt have to be ran before it can be looped to.
+    # Can maybe make a special loop label that tells the actioner to not run the actions until the loop action is called.
 
     def run_action_loop(self):
 
         length = len(self.action_list)
         i = 0
+        active_loops = {}
+        mute = False
 
         while i < length and self.running:
             action_type = self.action_list[i][0]
-            if action_type == 'READ':
+            if action_type == 'READ' and not mute:
                 self.read_tag.emit(self.action_list[i][1], self.plc, self.main_window)
-            elif action_type == 'WRITE':
+            elif action_type == 'WRITE' and not mute:
                 self.write_tag.emit(self.action_list[i][1][0], self.action_list[i][1][1], self.plc, self.main_window)
-            elif action_type == 'JUMP':
+            elif action_type == 'JUMP' and not mute:
                 label = self.action_list[i][1]
                 i = self.labels[label]
                 self.update.emit(f"Jumping to label {label}...<br>", 'white', True)
-            elif action_type == 'WAIT TIME':
+            elif action_type == 'WAIT TIME' and not mute:
                 self.update.emit(f"Waiting {self.action_list[i][1]} seconds...", 'white', False)
                 time_count = 0
                 time_print_count = 0
@@ -717,7 +726,7 @@ class Actioner(QObject):
                         self.update.emit(f".", 'white', False)
                 if self.running:
                     self.update.emit(f"<br>Resuming...<br>", 'white', True)
-            elif action_type == 'WAIT TAG':
+            elif action_type == 'WAIT TAG' and not mute:
                 tag = self.action_list[i][1][0]
                 value = self.action_list[i][1][1]
                 result = None
@@ -732,7 +741,26 @@ class Actioner(QObject):
                     self.count += 1
                 if self.running:
                     self.update.emit(f"<br>Resuming...<br>", 'white', True)
-            
+            elif action_type == 'LOOP LABEL':
+                mute = True
+            elif action_type == 'LOOP':
+                label = self.action_list[i][1][1]
+                total_count = self.action_list[i][1][0]
+
+                if label not in active_loops:
+                    mute = False
+                    active_loops[label] = 0
+                    i = self.loop_labels[label]
+                    self.update.emit(f"Starting loop to {label}...<br>", 'white', True)
+                else:
+                    if active_loops[label] < total_count:
+                        active_loops[label] += 1
+                        i = self.loop_labels[label]
+                        self.update.emit(f"Looping to {label} (Loop {active_loops[label]} of {total_count})...<br>", 'white', True)
+                    else:
+                        # Loop is finished
+                        del active_loops[label]
+                        self.update.emit(f"Loop to {label} finished...<br>", 'white', True)
             i += 1
 
     def run(self):
@@ -744,6 +772,7 @@ class Actioner(QObject):
 
         self.finished.emit()
         self.running = False
+        self.toggle_button.emit()
 
     def stop(self):
         """
@@ -1427,6 +1456,7 @@ class MainWindow(QMainWindow):
         self.sequencer.update.connect(self.print_results)
         self.sequencer.read_tag.connect(self.seq_read_tag)
         self.sequencer.write_tag.connect(self.seq_write_tag)
+        self.sequencer.toggle_button.connect(self.toggle_sequencer_text)
 
         # Monitorer thread and signals
         self.monitorer = Monitorer()
@@ -1553,7 +1583,7 @@ class MainWindow(QMainWindow):
 
         # Set parameters
         self.sequencer_button.setDisabled(True)
-        self.action_dropdown.addItems(["Read Tag", "Write Tag", "Wait (Seconds)", "Label", "Jump", "Wait (Tag Value)"])
+        self.action_dropdown.addItems(["Read Tag", "Write Tag", "Wait (Seconds)", "Wait (Tag Value)", "Loop x Times To Label", "Loop Label", "Label", "Jump"])
         self.action_list.setModel(self.model)
 
         # Add to layouts
@@ -1715,7 +1745,14 @@ class MainWindow(QMainWindow):
         self.read_thread = QThread()
 
         self.labels = []
+        self.loop_labels = []
         self.sequence = []
+
+    def toggle_sequencer_text(self):
+        if self.sequencer_button.text() == "Start Sequence":
+            self.sequencer_button.setText("Stop Sequence")
+        else:
+            self.sequencer_button.setText("Start Sequence")
 
     def sequencer_button_clicked(self):
         if self.sequencer.running:
@@ -1789,12 +1826,16 @@ class MainWindow(QMainWindow):
             else:
                 return
         if action == 'Jump':
-            jump, ok = QInputDialog.getItem(self, 'Jump Dialog', 'Select Label To Jump To', self.labels)
-            if ok:
-                item = f'JUMP - {jump}'
-                self.sequence.append(('JUMP', jump))
-            else:
+            if len(self.labels) == 0:
+                self.error_dialog('No Labels To Jump To')
                 return
+            else:
+                jump, ok = QInputDialog.getItem(self, 'Jump Dialog', 'Select Label To Jump To', self.labels)
+                if ok:
+                    item = f'JUMP - {jump}'
+                    self.sequence.append(('JUMP', jump))
+                else:
+                    return
         if action == 'Wait (Tag Value)':
             tag, ok = QInputDialog.getText(self, 'Tag Dialog', 'Input Tag')
             if ok:
@@ -1806,6 +1847,28 @@ class MainWindow(QMainWindow):
                     return
             else:
                 return
+        if action == 'Loop Label':
+            label, ok = QInputDialog.getText(self, 'Loop Label Dialog', 'Input Label')
+            if ok:
+                self.loop_labels.append(label)
+                item = f'LOOP - {label}'
+                self.sequence.append(('LOOP LABEL', label))
+            else:
+                return
+        if action == 'Loop x Times To Label':
+            if len(self.loop_labels) == 0:
+                self.error_dialog('No Loop Labels To Jump To')
+                return
+            loop, ok = QInputDialog.getInt(self, 'Loop Dialog', 'Input Number of Times To Loop')
+            if ok:
+                label, ok = QInputDialog.getItem(self, 'Loop Dialog', 'Select Label To Jump To', self.loop_labels)
+                if ok:
+                    item = f'LOOP - {loop} Times To {label}'
+                    self.sequence.append(('LOOP', (loop, label)))
+                else:
+                    return
+            else:
+                return
 
         if item != '':
             list_item = QStandardItem(item)
@@ -1813,6 +1876,12 @@ class MainWindow(QMainWindow):
 
 
     def remove_from_action_list(self):
+        # If row selected is a label, remove it from the list of labels
+        if self.action_list.currentIndex().data().split(' ')[0] == 'LABEL':
+            self.labels.remove(self.action_list.currentIndex().data().split(' ')[2])
+        if self.action_list.currentIndex().data().split(' ')[0] == 'LOOP':
+            self.loop_labels.remove(self.action_list.currentIndex().data().split(' ')[5])
+
         self.model.removeRow(self.action_list.currentIndex().row())
         self.sequence.pop(self.action_list.currentIndex().row())
 
