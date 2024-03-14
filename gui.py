@@ -669,6 +669,8 @@ class Actioner(QObject):
 
     update = Signal(str, str, bool)
     finished = Signal()
+    read_tag = Signal(str, LogixDriver, QTextBrowser)
+    write_tag = Signal(str, str, LogixDriver, QTextBrowser)
 
     def __init__(self):
         """
@@ -694,9 +696,9 @@ class Actioner(QObject):
         while i < length and self.running:
             action_type = self.action_list[i][0]
             if action_type == 'READ':
-                read_tag(self.action_list[i][1], self.plc, self.main_window)
+                self.read_tag.emit(self.action_list[i][1], self.plc, self.main_window)
             elif action_type == 'WRITE':
-                write_tag(self.action_list[i][1][0], set_data_type(self.action_list[i][1][1],self.action_list[i][1][0]), self.main_window, self.plc)
+                self.write_tag.emit(self.action_list[i][1][0], self.action_list[i][1][1], self.plc, self.main_window)
             elif action_type == 'JUMP':
                 label = self.action_list[i][1]
                 i = self.labels[label]
@@ -1423,6 +1425,8 @@ class MainWindow(QMainWindow):
         self.sequencer_thread.started.connect(self.sequencer.run)
         self.sequencer.finished.connect(self.sequencer_thread.quit)
         self.sequencer.update.connect(self.print_results)
+        self.sequencer.read_tag.connect(self.seq_read_tag)
+        self.sequencer.write_tag.connect(self.seq_write_tag)
 
         # Monitorer thread and signals
         self.monitorer = Monitorer()
@@ -1724,7 +1728,7 @@ class MainWindow(QMainWindow):
                 self.sequencer.main_window = self
                 self.sequencer.running = True
                 self.sequencer_thread.start()
-            self.sequencer_button.setText("Stop Sequence")
+                self.sequencer_button.setText("Stop Sequence")
     
 
     def error_dialog(self, message):
@@ -1811,7 +1815,6 @@ class MainWindow(QMainWindow):
     def remove_from_action_list(self):
         self.model.removeRow(self.action_list.currentIndex().row())
         self.sequence.pop(self.action_list.currentIndex().row())
-        print(self.sequence)
 
     
     @check_plc_connection_decorator
@@ -2222,6 +2225,12 @@ class MainWindow(QMainWindow):
                 file_name = file_name + '.csv'
 
         return file_name
+    
+    def seq_read_tag(self, tag, plc):
+        read_tag(tag, plc, self)
+
+    def seq_write_tag(self, tag, value, plc):
+        write_tag(tag, set_data_type(value, tag), self, plc)
 
     @check_tag_decorator
     @check_plc_connection_decorator
