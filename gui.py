@@ -1755,6 +1755,9 @@ class MainWindow(QMainWindow):
             self.sequencer_button.setText("Start Sequence")
 
     def sequencer_button_clicked(self):
+        # Check sequence
+
+
         if self.sequencer.running:
             self.sequencer.stop()
             self.sequencer_button.setText("Start Sequence")
@@ -1777,6 +1780,32 @@ class MainWindow(QMainWindow):
         dialog.setLayout(layout)
         dialog.setFixedWidth(200)
         dialog.exec_()
+
+    '''
+    Will add help window for the sequencer actions
+
+    Action: Read Tag
+        - Reads the tag specified in the tag input field.
+    Action: Write Tag
+        - Writes the value specified in the value input field to the tag specified in the tag input field.
+    Action: Wait (Seconds)
+        - Waits for the specified number of seconds
+    Action: Wait (Tag Value)
+        - Waits for the specified tag to read the specified value
+        - Checks tag every 100ms
+    Action: Loop Label
+        - Sets the start point of a loop.
+        - Must be followed by a "Loop x Times To Label" action or this action does nothing
+    Action: Loop x Times To Label
+        - Loops the specified number of times to the specified label
+        - A "Loop Label" action must be used before this action or you will get an error
+    Action: Label
+        - Sets a label to jump to
+        - Must be followed by a "Jump" action or this action does nothing
+    Action: Jump
+        - Jumps to the specified label (must be a label in the list)
+        - A "Label" action must be used before this action or you will get an error
+    '''
 
     def add_action_button_clicked(self):
         # get the selected action
@@ -1876,15 +1905,37 @@ class MainWindow(QMainWindow):
 
 
     def remove_from_action_list(self):
+        was_label = False
+        was_loop_label = False
+        label = ''
+        loop_label = ''
+
         # If row selected is a label, remove it from the list of labels
         if self.action_list.currentIndex().data().split(' ')[0] == 'LABEL':
+            label = self.action_list.currentIndex().data().split(' ')[2]
             self.labels.remove(self.action_list.currentIndex().data().split(' ')[2])
+            was_label = True
+        
         if self.action_list.currentIndex().data().split(' ')[0] == 'LOOP':
-            self.loop_labels.remove(self.action_list.currentIndex().data().split(' ')[5])
+            loop_label = self.action_list.currentIndex().data().split(' ')[2]
+            self.loop_labels.remove(self.action_list.currentIndex().data().split(' ')[2])
+            was_loop_label = True  
 
         self.model.removeRow(self.action_list.currentIndex().row())
         self.sequence.pop(self.action_list.currentIndex().row())
 
+        # Remove the item from the sequence list
+        for i, action in enumerate(self.sequence):
+            if action[0] == 'JUMP' and action[1] == label and was_label:
+                self.sequence.pop(i)
+                self.model.removeRow(i)
+            if action[0] == 'LOOP' and action[1][1] == loop_label and was_loop_label:
+                self.sequence.pop(i)
+                self.model.removeRow(i)
+
+        print(self.sequence)
+        print(self.labels)
+        print(self.loop_labels)
     
     @check_plc_connection_decorator
     def get_structure_for_value_tree(self, tags):
