@@ -1577,6 +1577,7 @@ class MainWindow(QMainWindow):
         self.sequencer_button = QPushButton("Start Sequence")
         self.action_dropdown = QComboBox()
         self.add_action_button = QPushButton("Add Action")
+        self.insert_action_button = QPushButton("Inser Action Above Selected")
         self.remove_action_button = QPushButton("Remove Action")
         self.action_list = QListView()
         self.model = QtGui.QStandardItemModel()
@@ -1585,10 +1586,12 @@ class MainWindow(QMainWindow):
         self.sequencer_button.setDisabled(True)
         self.action_dropdown.addItems(["Read Tag", "Write Tag", "Wait (Seconds)", "Wait (Tag Value)", "Loop x Times To Label", "Loop Label", "Label", "Jump"])
         self.action_list.setModel(self.model)
+        self.insert_action_button.setDisabled(True)
 
         # Add to layouts
         sequencer_tab_layout.addWidget(self.action_dropdown)
         sequencer_tab_layout.addWidget(self.add_action_button)
+        sequencer_tab_layout.addWidget(self.insert_action_button)
         sequencer_tab_layout.addWidget(self.remove_action_button)
         sequencer_tab_layout.addWidget(self.action_list)
         sequencer_tab_layout.addWidget(self.sequencer_button)
@@ -1736,6 +1739,7 @@ class MainWindow(QMainWindow):
 
         self.add_action_button.clicked.connect(self.add_action_button_clicked)
         self.remove_action_button.clicked.connect(self.remove_from_action_list)
+        self.insert_action_button.clicked.connect(self.insert_action_button_clicked)
 
         # Load stored data if available
         self.ip_input.setText(self.settings.value('ip', ''))
@@ -1755,9 +1759,6 @@ class MainWindow(QMainWindow):
             self.sequencer_button.setText("Start Sequence")
 
     def sequencer_button_clicked(self):
-        # Check sequence
-
-
         if self.sequencer.running:
             self.sequencer.stop()
             self.sequencer_button.setText("Start Sequence")
@@ -1807,7 +1808,7 @@ class MainWindow(QMainWindow):
         - A "Label" action must be used before this action or you will get an error
     '''
 
-    def add_action_button_clicked(self):
+    def process_action(self):
         # get the selected action
         action = self.action_dropdown.currentText()
 
@@ -1898,10 +1899,26 @@ class MainWindow(QMainWindow):
                     return
             else:
                 return
+        
+        return item
 
+    def insert_action_button_clicked(self, item):
+        item = self.process_action()
+        if item != '':
+            list_item = QStandardItem(item)
+            self.model.insertRow(self.action_list.currentIndex().row(), list_item)
+
+    def add_action_button_clicked(self, item):
+        item = self.process_action()
         if item != '':
             list_item = QStandardItem(item)
             self.model.appendRow(list_item)
+        
+        if len(self.sequence) > 0:
+            self.insert_action_button.setEnabled(True)
+            if plc != None:
+                if plc.connected:
+                    self.sequencer_button.setEnabled(True)
 
 
     def remove_from_action_list(self):
@@ -1932,10 +1949,10 @@ class MainWindow(QMainWindow):
             if action[0] == 'LOOP' and action[1][1] == loop_label and was_loop_label:
                 self.sequence.pop(i)
                 self.model.removeRow(i)
-
-        print(self.sequence)
-        print(self.labels)
-        print(self.loop_labels)
+        
+        if len(self.sequence) == 0:
+            self.insert_action_button.setDisabled(True)
+            self.sequencer_button.setDisabled(True)
     
     @check_plc_connection_decorator
     def get_structure_for_value_tree(self, tags):
@@ -2302,7 +2319,9 @@ class MainWindow(QMainWindow):
         self.trend_button.setDisabled(False)
         self.read_button.setDisabled(False)
         self.write_button.setDisabled(False)
-        self.sequencer_button.setDisabled(False)
+        
+        if len(self.sequence) > 0:
+            self.sequencer_button.setEnabled(True)
 
     def disable_buttons(self):
         self.trend_button.setDisabled(True)
