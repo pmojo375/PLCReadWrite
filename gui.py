@@ -741,6 +741,21 @@ class Actioner(QObject):
                     self.count += 1
                 if self.running:
                     self.update.emit(f"<br>Resuming...<br>", 'white', True)
+            elif action_type == 'WAIT CHANGE' and not mute:
+                tag = self.action_list[i][1]
+                initial_value = self.plc.read(tag).value
+                result = self.plc.read(tag).value
+                self.update.emit(f"Waiting For {tag} to change from {initial_value}...", 'white', False)
+                self.count = 0
+                while str(result) == str(initial_value) and self.running:
+                    if self.count == 10:
+                        self.count = 0
+                        self.update.emit(f".", 'white', False)
+                    result = self.plc.read(tag).value
+                    QThread.msleep(100)
+                    self.count += 1
+                if self.running:
+                    self.update.emit(f"<br>Resuming...<br>", 'white', True)
             elif action_type == 'LOOP LABEL':
                 mute = True
             elif action_type == 'LOOP':
@@ -762,6 +777,8 @@ class Actioner(QObject):
                         del active_loops[label]
                         self.update.emit(f"Loop to {label} finished...<br>", 'white', True)
             i += 1
+        
+        self.update.emit(f"Actioner finished...<br>", 'white', True)
 
     def run(self):
         """
@@ -1584,9 +1601,10 @@ class MainWindow(QMainWindow):
 
         # Set parameters
         self.sequencer_button.setDisabled(True)
-        self.action_dropdown.addItems(["Read Tag", "Write Tag", "Wait (Seconds)", "Wait (Tag Value)", "Loop x Times To Label", "Loop Label", "Label", "Jump"])
+        self.action_dropdown.addItems(["Read Tag", "Write Tag", "Wait (Seconds)", "Wait (Tag Value)", "Wait (Tag Change)", "Loop x Times To Label", "Loop Label", "Label", "Jump"])
         self.action_list.setModel(self.model)
         self.insert_action_button.setDisabled(True)
+        self.remove_action_button.setDisabled(True)
 
         # Add to layouts
         sequencer_tab_layout.addWidget(self.action_dropdown)
@@ -1899,6 +1917,17 @@ class MainWindow(QMainWindow):
                     return
             else:
                 return
+        if action == 'Wait (Tag Change)':
+            tag, ok = QInputDialog.getText(self, 'Tag Dialog', 'Input Tag')
+            if ok:
+                if self.is_valid_tag_input(tag, tag_types):
+                    item = f'WAIT - {tag} Value Change'
+                    self.sequence.append(('WAIT CHANGE', tag))
+                else:
+                    self.error_dialog('Tag Does Not Exist')
+                    return
+            else:
+                return
         
         return item
 
@@ -1916,6 +1945,7 @@ class MainWindow(QMainWindow):
         
         if len(self.sequence) > 0:
             self.insert_action_button.setEnabled(True)
+            self.remove_action_button.setEnabled(True)
             if plc != None:
                 if plc.connected:
                     self.sequencer_button.setEnabled(True)
@@ -1953,6 +1983,7 @@ class MainWindow(QMainWindow):
         if len(self.sequence) == 0:
             self.insert_action_button.setDisabled(True)
             self.sequencer_button.setDisabled(True)
+            self.remove_action_button.setDisabled(True)
     
     @check_plc_connection_decorator
     def get_structure_for_value_tree(self, tags):
