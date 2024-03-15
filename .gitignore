@@ -7,3 +7,4 @@ dist
 gui.spec
 *.csv
 *.yaml
+tag_types.json
