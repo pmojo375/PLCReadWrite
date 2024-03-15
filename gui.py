@@ -1577,7 +1577,7 @@ class MainWindow(QMainWindow):
         self.sequencer_button = QPushButton("Start Sequence")
         self.action_dropdown = QComboBox()
         self.add_action_button = QPushButton("Add Action")
-        self.insert_action_button = QPushButton("Inser Action Above Selected")
+        self.insert_action_button = QPushButton("Insert Action Above Selected")
         self.remove_action_button = QPushButton("Remove Action")
         self.action_list = QListView()
         self.model = QtGui.QStandardItemModel()
